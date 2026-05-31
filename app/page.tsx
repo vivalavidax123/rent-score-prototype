@@ -34,12 +34,15 @@ type NearbyPlace = {
   latitude: number;
   longitude: number;
   distanceMeters: number;
+  rating: number | null;
+  userRatingCount: number;
   source: "brand" | "generic";
 };
 
 type PlaceGroup = {
   id: string;
   label: string;
+  radiusMeters: number;
   places: NearbyPlace[];
 };
 
@@ -52,6 +55,7 @@ type CategoryScore = {
   detail: string;
   count: number;
   closestDistanceMeters: number | null;
+  radiusMeters: number;
   explanation: string;
 };
 
@@ -73,6 +77,35 @@ function formatDistance(distanceMeters: number) {
   return distanceMeters < 1000
     ? `${distanceMeters} m`
     : `${(distanceMeters / 1000).toFixed(1)} km`;
+}
+
+function formatRadius(radiusMeters: number) {
+  return radiusMeters < 1000
+    ? `${radiusMeters} m`
+    : `${radiusMeters / 1000} km`;
+}
+
+function formatReviewSummary(place: NearbyPlace) {
+  if (place.userRatingCount === 0) {
+    return "No reviews";
+  }
+
+  const rating = place.rating === null ? "" : `${place.rating.toFixed(1)} rating, `;
+  const reviewLabel = place.userRatingCount === 1 ? "review" : "reviews";
+
+  return `${rating}${place.userRatingCount.toLocaleString()} ${reviewLabel}`;
+}
+
+function formatGroupScope(group: PlaceGroup) {
+  if (group.id === "transport") {
+    return "bus stops within 500 m + nearest stations";
+  }
+
+  return `${group.places.length} found within ${formatRadius(group.radiusMeters)}`;
+}
+
+function formatPlaceType(primaryType: string) {
+  return primaryType.replaceAll("_", " ");
 }
 
 export default function Home() {
@@ -239,7 +272,8 @@ export default function Home() {
             {placesState === "idle" ? (
               <p className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-600">
                 Search for a location to calculate scores from nearby shops,
-                services, transport, health, food, and fitness options.
+                shopping centres, services, transport, health, food, and fitness
+                options.
               </p>
             ) : null}
 
@@ -297,7 +331,7 @@ export default function Home() {
             <LocationMap location={location} placeGroups={placeGroups} />
             <p className="mt-4 text-sm leading-6 text-slate-600">
               {location
-                ? `Matched as ${location.locationType.toLowerCase().replaceAll("_", " ")}. Map markers show the searched location and nearby amenities within 3 km.`
+                ? `Matched as ${location.locationType.toLowerCase().replaceAll("_", " ")}. Map markers show the searched location and nearby amenities using each category radius.`
                 : "Search for a location to show nearby amenities on the map."}
             </p>
           </div>
@@ -335,35 +369,40 @@ export default function Home() {
                         {group.label}
                       </h3>
                       <span className="text-xs font-medium text-slate-500">
-                        {group.places.length} found
+                        {formatGroupScope(group)}
                       </span>
                     </div>
                     {group.places.length > 0 ? (
                       <ul className="space-y-2">
-                        {group.places.slice(0, 4).map((place) => (
+                        {group.places.slice(0, 6).map((place) => (
                           <li
                             key={place.id}
-                            className="rounded-md bg-slate-50 px-4 py-3 text-sm"
+                            className="rounded-md bg-slate-50 px-3 py-2 text-sm"
                           >
                             <div className="flex items-start justify-between gap-3">
-                              <span className="font-medium text-slate-800">
+                              <span className="line-clamp-1 font-medium text-slate-800">
                                 {place.name}
                               </span>
                               <span className="shrink-0 text-xs font-semibold text-emerald-700">
                                 {formatDistance(place.distanceMeters)}
                               </span>
                             </div>
-                            <div className="mt-2 flex flex-wrap items-center gap-2">
-                              <span className="rounded-full bg-white px-2 py-1 text-xs font-medium text-slate-600 ring-1 ring-slate-200">
+                            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                              <span className="rounded-full bg-white px-1.5 py-0.5 text-[11px] font-medium text-slate-600 ring-1 ring-slate-200">
                                 {place.source === "brand"
                                   ? "Brand match"
                                   : "Nearby place"}
                               </span>
-                              <span className="text-xs text-slate-500">
-                                {place.primaryType.replaceAll("_", " ")}
+                              {group.id !== "transport" ? (
+                                <span className="rounded-full bg-white px-1.5 py-0.5 text-[11px] font-medium text-slate-600 ring-1 ring-slate-200">
+                                  {formatReviewSummary(place)}
+                                </span>
+                              ) : null}
+                              <span className="text-[11px] text-slate-500">
+                                {formatPlaceType(place.primaryType)}
                               </span>
                             </div>
-                            <p className="mt-2 line-clamp-2 text-xs leading-5 text-slate-500">
+                            <p className="mt-1 line-clamp-1 text-[11px] leading-4 text-slate-500">
                               {place.address}
                             </p>
                           </li>

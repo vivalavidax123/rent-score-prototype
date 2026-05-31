@@ -1,4 +1,4 @@
-import { rentScoreCategories, searchRadiusMeters } from "./categories";
+import { rentScoreCategories } from "./categories";
 
 export type PlaceSource = "brand" | "generic";
 
@@ -10,12 +10,15 @@ export type NearbyPlace = {
   latitude: number;
   longitude: number;
   distanceMeters: number;
+  rating: number | null;
+  userRatingCount: number;
   source: PlaceSource;
 };
 
 export type PlaceGroup = {
   id: string;
   label: string;
+  radiusMeters: number;
   places: NearbyPlace[];
 };
 
@@ -28,16 +31,17 @@ export type CategoryScore = {
   detail: string;
   count: number;
   closestDistanceMeters: number | null;
+  radiusMeters: number;
   explanation: string;
 };
 
-function getDistanceScore(distanceMeters: number | null) {
+function getDistanceScore(distanceMeters: number | null, radiusMeters: number) {
   if (distanceMeters === null) {
     return 0;
   }
 
-  const normalizedDistance = Math.min(distanceMeters, searchRadiusMeters);
-  return Math.round(((searchRadiusMeters - normalizedDistance) / searchRadiusMeters) * 45);
+  const normalizedDistance = Math.min(distanceMeters, radiusMeters);
+  return Math.round(((radiusMeters - normalizedDistance) / radiusMeters) * 45);
 }
 
 function getCountScore(count: number) {
@@ -61,10 +65,14 @@ export function scorePlaceGroups(groups: PlaceGroup[]) {
   const scores = rentScoreCategories.map((category) => {
     const group = groups.find((candidate) => candidate.id === category.id);
     const places = group?.places ?? [];
-    const closestDistanceMeters = places[0]?.distanceMeters ?? null;
+    const closestDistanceMeters =
+      places.length > 0
+        ? Math.min(...places.map((place) => place.distanceMeters))
+        : null;
     const score = Math.min(
       100,
-      getCountScore(places.length) + getDistanceScore(closestDistanceMeters),
+      getCountScore(places.length) +
+        getDistanceScore(closestDistanceMeters, category.radiusMeters),
     );
 
     return {
@@ -76,6 +84,7 @@ export function scorePlaceGroups(groups: PlaceGroup[]) {
       detail: category.detail,
       count: places.length,
       closestDistanceMeters,
+      radiusMeters: category.radiusMeters,
       explanation: getExplanation(places.length, closestDistanceMeters),
     };
   });

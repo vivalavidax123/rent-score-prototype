@@ -16,12 +16,15 @@ type NearbyPlace = {
   latitude: number;
   longitude: number;
   distanceMeters: number;
+  rating: number | null;
+  userRatingCount: number;
   source: "brand" | "generic";
 };
 
 type PlaceGroup = {
   id: string;
   label: string;
+  radiusMeters: number;
   places: NearbyPlace[];
 };
 
@@ -80,13 +83,14 @@ declare global {
 }
 
 const categoryColors: Record<string, string> = {
-  shopping: "#10b981",
+  shopping_centres: "#14b8a6",
+  groceries: "#10b981",
   food: "#f59e0b",
   transport: "#0ea5e9",
   health: "#f43f5e",
   fitness: "#8b5cf6",
-  services: "#6366f1",
   fuel: "#f97316",
+  services: "#6366f1",
 };
 
 let googleMapsPromise: Promise<GoogleMapsApi> | null = null;

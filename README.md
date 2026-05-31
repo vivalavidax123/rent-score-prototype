@@ -2,7 +2,7 @@
 
 A web-based prototype that helps renters evaluate the convenience and livability of a location based on nearby amenities and services.
 
-The system allows users to search for an address, suburb, street, or approximate location, then generates convenience scores using nearby facilities such as shopping centres, cafes, gyms, fuel stations, pharmacies, post offices, and public transport.
+The system allows users to search for an address, suburb, street, or approximate location, then generates convenience scores using nearby facilities such as shopping centres, groceries, cafes, gyms, fuel stations, pharmacies, post offices, and public transport.
 
 This project is intended as a functional prototype rather than a production-ready platform.
 
@@ -40,7 +40,8 @@ The scoring system evaluates convenience using categories such as:
 
 | Category          | Example Amenities                     |
 | ----------------- | ------------------------------------- |
-| Shopping          | Supermarkets, shopping centres        |
+| Shopping Centres | Shopping malls, retail hubs           |
+| Groceries         | Supermarkets, grocery stores          |
 | Food & Cafes      | Cafes, restaurants, bakeries          |
 | Fitness           | Gyms, fitness centres                 |
 | Transport         | Train stations, tram stops, bus stops |
@@ -53,7 +54,8 @@ The scoring system evaluates convenience using categories such as:
 # Example Output
 
 ```text
-Shopping: 82/100
+Shopping Centres: 78/100
+Groceries: 82/100
 Food & Cafes: 76/100
 Transport: 65/100
 Fitness: 45/100
@@ -74,7 +76,8 @@ Each category score is based on:
 
 Example factors:
 
-* More supermarkets nearby → higher shopping score
+* More supermarkets nearby -> higher groceries score
+* Closer shopping centres within 10 km -> higher shopping centres score
 * Closer train stations → higher transport score
 * Fewer gyms nearby → lower fitness score
 

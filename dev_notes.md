@@ -16,6 +16,19 @@ Category metadata lives in `app/lib/categories.ts` instead of inside the Places 
 
 This avoids duplicating category labels, weights, or colors between the API, scoring logic, and UI.
 
+Places should be assigned to one primary category only. Category order is also the dedupe priority:
+
+1. Shopping Centres
+2. Groceries
+3. Food & Cafes
+4. Transport
+5. Health
+6. Fitness
+7. Fuel & Automotive
+8. Services
+
+This keeps mixed-use results such as fast food, fuel stations, convenience stores, and banks from appearing in multiple score buckets.
+
 ## Places Retrieval
 
 The Places API route combines two kinds of results:
@@ -24,6 +37,12 @@ The Places API route combines two kinds of results:
 * Generic nearby places, such as supermarkets, cafes, restaurants, pharmacies, banks, post offices, fuel stations, and transit stations.
 
 Brand results use Google Places Text Search because brand names are query text. Generic results use Google Places Nearby Search with included place types. Results are deduped by Google place ID, and a brand match is kept over a generic match when the same place appears in both result sets.
+
+Category-level duplicate place IDs are filtered after retrieval using the category priority above. Shopping Centres use a 10 km search radius; the other MVP categories use the default 3 km radius.
+
+Within each category, returned places are sorted for display by Google review count, then rating, then distance. Scoring still calculates closest distance from all places in the category, so popularity ordering does not weaken the proximity score.
+
+Transport is the exception to the general category retrieval. It shows up to four nearest bus stops within 500 m, one nearest metro/train station from nearby rail station results, and one nearest V/Line station with no hard distance cutoff. V/Line classification is based on the local station list in `app/lib/vline-stations.txt`, which avoids relying on Google Places to label regional rail stations consistently. Transport rows do not show review counts because popularity is less useful for stops and stations.
 
 ## Scoring V1
 
