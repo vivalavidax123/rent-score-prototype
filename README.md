@@ -107,28 +107,17 @@ The overall score is calculated using weighted averages across all categories.
 
 ```text
 rent-score-prototype/
-├── src/
-│   ├── app/
-│   │   ├── api/
-│   │   ├── layout.tsx
-│   │   └── page.tsx
-│   │
-│   ├── components/
-│   │   ├── SearchBox.tsx
-│   │   ├── ScorePanel.tsx
-│   │   ├── CategoryBreakdown.tsx
-│   │   └── MapView.tsx
-│   │
+├── app/
+│   ├── api/
+│   │   ├── geocode/
+│   │   └── places/
 │   ├── lib/
-│   │   ├── scoring.ts
-│   │   ├── places.ts
-│   │   ├── geocoding.ts
-│   │   └── categories.ts
-│   │
-│   └── types/
-│       └── place.ts
-│
+│   │   ├── categories.ts
+│   │   └── scoring.ts
+│   ├── layout.tsx
+│   └── page.tsx
 ├── public/
+├── dev_notes.md
 ├── README.md
 ├── package.json
 └── .env.local

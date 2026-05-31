@@ -1,8 +1,14 @@
-type PlaceCategory = {
-  id: string;
-  label: string;
-  brandTerms: string[];
-};
+import {
+  rentScoreCategories,
+  searchRadiusMeters,
+  type RentScoreCategory,
+} from "@/app/lib/categories";
+import {
+  getDistanceMeters,
+  scorePlaceGroups,
+  type NearbyPlace,
+  type PlaceSource,
+} from "@/app/lib/scoring";
 
 type GooglePlace = {
   id?: string;
@@ -17,65 +23,13 @@ type GooglePlace = {
   primaryType?: string;
 };
 
-type GoogleNearbyResponse = {
+type GooglePlacesResponse = {
   places?: GooglePlace[];
   error?: {
     message?: string;
     status?: string;
   };
 };
-
-const categories: PlaceCategory[] = [
-  {
-    id: "shopping",
-    label: "Shopping",
-    brandTerms: ["Woolworths", "Coles", "ALDI", "IGA"],
-  },
-  {
-    id: "food",
-    label: "Food & Cafes",
-    brandTerms: [
-      "McDonald's",
-      "KFC",
-      "Hungry Jack's",
-      "Guzman y Gomez",
-      "Starbucks",
-      "Gloria Jean's",
-    ],
-  },
-  {
-    id: "transport",
-    label: "Transport",
-    brandTerms: ["Sydney Trains", "Metro station", "light rail station"],
-  },
-  {
-    id: "health",
-    label: "Health",
-    brandTerms: [
-      "Chemist Warehouse",
-      "Priceline Pharmacy",
-      "TerryWhite Chemmart",
-      "Amcal Pharmacy",
-    ],
-  },
-  {
-    id: "fitness",
-    label: "Fitness",
-    brandTerms: ["Anytime Fitness", "Fitness First", "Snap Fitness", "Plus Fitness", "Zip Fitness"],
-  },
-  {
-    id: "services",
-    label: "Services",
-    brandTerms: ["Australia Post", "Commonwealth Bank", "ANZ", "NAB", "Westpac"],
-  },
-  {
-    id: "fuel",
-    label: "Fuel & Automotive",
-    brandTerms: ["Ampol", "BP", "Shell", "7-Eleven"],
-  },
-];
-
-const searchRadiusMeters = 3000;
 
 function parseCoordinate(value: string | null) {
   if (!value) {
@@ -87,28 +41,7 @@ function parseCoordinate(value: string | null) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function getDistanceMeters(
-  origin: { latitude: number; longitude: number },
-  destination: { latitude: number; longitude: number },
-) {
-  const earthRadiusMeters = 6371000;
-  const latA = (origin.latitude * Math.PI) / 180;
-  const latB = (destination.latitude * Math.PI) / 180;
-  const deltaLat = ((destination.latitude - origin.latitude) * Math.PI) / 180;
-  const deltaLng = ((destination.longitude - origin.longitude) * Math.PI) / 180;
-  const haversine =
-    Math.sin(deltaLat / 2) * Math.sin(deltaLat / 2) +
-    Math.cos(latA) *
-      Math.cos(latB) *
-      Math.sin(deltaLng / 2) *
-      Math.sin(deltaLng / 2);
-  const centralAngle =
-    2 * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine));
-
-  return Math.round(earthRadiusMeters * centralAngle);
-}
-
-function normalizeBrand(value: string) {
+function normalizeText(value: string) {
   return value
     .toLowerCase()
     .replaceAll("&", "and")
@@ -117,10 +50,7 @@ function normalizeBrand(value: string) {
 }
 
 function placeMatchesBrand(placeName: string, brandTerm: string) {
-  const normalizedName = normalizeBrand(placeName);
-  const normalizedBrand = normalizeBrand(brandTerm);
-
-  return normalizedName.includes(normalizedBrand);
+  return normalizeText(placeName).includes(normalizeText(brandTerm));
 }
 
 async function fetchPlacesForBrand({
@@ -159,13 +89,112 @@ async function fetchPlacesForBrand({
     }),
   });
 
-  const data = (await response.json()) as GoogleNearbyResponse;
+  const data = (await response.json()) as GooglePlacesResponse;
 
   if (!response.ok) {
-    throw new Error(data.error?.message ?? "Places search failed.");
+    throw new Error(data.error?.message ?? "Places text search failed.");
   }
 
   return data.places ?? [];
+}
+
+async function fetchPlacesForTypes({
+  apiKey,
+  placeTypes,
+  latitude,
+  longitude,
+}: {
+  apiKey: string;
+  placeTypes: string[];
+  latitude: number;
+  longitude: number;
+}) {
+  const response = await fetch("https://places.googleapis.com/v1/places:searchNearby", {
+    method: "POST",
+    cache: "no-store",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Goog-Api-Key": apiKey,
+      "X-Goog-FieldMask":
+        "places.id,places.displayName,places.formattedAddress,places.location,places.primaryType",
+    },
+    body: JSON.stringify({
+      includedTypes: placeTypes,
+      maxResultCount: 10,
+      locationRestriction: {
+        circle: {
+          center: {
+            latitude,
+            longitude,
+          },
+          radius: searchRadiusMeters,
+        },
+      },
+      regionCode: "AU",
+    }),
+  });
+
+  const data = (await response.json()) as GooglePlacesResponse;
+
+  if (!response.ok) {
+    throw new Error(data.error?.message ?? "Places nearby search failed.");
+  }
+
+  return data.places ?? [];
+}
+
+function addPlaceToMap({
+  placesById,
+  place,
+  origin,
+  source,
+  brandTerm,
+}: {
+  placesById: Map<string, NearbyPlace>;
+  place: GooglePlace;
+  origin: { latitude: number; longitude: number };
+  source: PlaceSource;
+  brandTerm?: string;
+}) {
+  const placeLatitude = place.location?.latitude;
+  const placeLongitude = place.location?.longitude;
+
+  if (
+    !place.id ||
+    !place.displayName?.text ||
+    typeof placeLatitude !== "number" ||
+    typeof placeLongitude !== "number"
+  ) {
+    return;
+  }
+
+  if (brandTerm && !placeMatchesBrand(place.displayName.text, brandTerm)) {
+    return;
+  }
+
+  const distanceMeters = getDistanceMeters(origin, {
+    latitude: placeLatitude,
+    longitude: placeLongitude,
+  });
+
+  if (distanceMeters > searchRadiusMeters) {
+    return;
+  }
+
+  const existing = placesById.get(place.id);
+
+  if (existing?.source === "brand" && source === "generic") {
+    return;
+  }
+
+  placesById.set(place.id, {
+    id: place.id,
+    name: place.displayName.text,
+    address: place.formattedAddress ?? "Address unavailable",
+    primaryType: place.primaryType ?? "place",
+    distanceMeters,
+    source,
+  });
 }
 
 async function fetchPlacesForCategory({
@@ -175,67 +204,50 @@ async function fetchPlacesForCategory({
   longitude,
 }: {
   apiKey: string;
-  category: PlaceCategory;
+  category: RentScoreCategory;
   latitude: number;
   longitude: number;
 }) {
   const origin = { latitude, longitude };
-  const placesById = new Map<
-    string,
-    {
-      id: string;
-      name: string;
-      address: string;
-      primaryType: string;
-      distanceMeters: number;
-    }
-  >();
+  const placesById = new Map<string, NearbyPlace>();
 
-  const brandResults = await Promise.all(
-    category.brandTerms.map(async (brandTerm) => ({
-      brandTerm,
-      places: await fetchPlacesForBrand({
-        apiKey,
+  const [brandResults, genericPlaces] = await Promise.all([
+    Promise.all(
+      category.brandTerms.map(async (brandTerm) => ({
         brandTerm,
-        latitude,
-        longitude,
-      }),
-    })),
-  );
+        places: await fetchPlacesForBrand({
+          apiKey,
+          brandTerm,
+          latitude,
+          longitude,
+        }),
+      })),
+    ),
+    fetchPlacesForTypes({
+      apiKey,
+      placeTypes: category.placeTypes,
+      latitude,
+      longitude,
+    }),
+  ]);
+
+  for (const place of genericPlaces) {
+    addPlaceToMap({
+      placesById,
+      place,
+      origin,
+      source: "generic",
+    });
+  }
 
   for (const brandResult of brandResults) {
     for (const place of brandResult.places) {
-        const placeLatitude = place.location?.latitude;
-        const placeLongitude = place.location?.longitude;
-
-        if (
-          !place.id ||
-          !place.displayName?.text ||
-          typeof placeLatitude !== "number" ||
-          typeof placeLongitude !== "number"
-        ) {
-          continue;
-        }
-
-      if (!placeMatchesBrand(place.displayName.text, brandResult.brandTerm)) {
-        continue;
-      }
-
-      const distanceMeters = getDistanceMeters(origin, {
-        latitude: placeLatitude,
-        longitude: placeLongitude,
-      });
-
-      if (distanceMeters > searchRadiusMeters) {
-        continue;
-      }
-
-      placesById.set(place.id, {
-        id: place.id,
-          name: place.displayName.text,
-          address: place.formattedAddress ?? "Address unavailable",
-          primaryType: place.primaryType ?? "place",
-        distanceMeters,
+      addPlaceToMap({
+        placesById,
+        place,
+        origin,
+        source: "brand",
+        brandTerm: brandResult.brandTerm,
       });
     }
   }
@@ -275,7 +287,7 @@ export async function GET(request: Request) {
 
   try {
     const groups = await Promise.all(
-      categories.map((category) =>
+      rentScoreCategories.map((category) =>
         fetchPlacesForCategory({
           apiKey,
           category,
@@ -284,8 +296,9 @@ export async function GET(request: Request) {
         }),
       ),
     );
+    const { overallScore, scores } = scorePlaceGroups(groups);
 
-    return Response.json({ ok: true, groups });
+    return Response.json({ ok: true, groups, scores, overallScore });
   } catch (error) {
     return Response.json(
       {

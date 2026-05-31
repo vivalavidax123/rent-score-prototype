@@ -2,39 +2,6 @@
 
 import { FormEvent, useState } from "react";
 
-const scoreCategories = [
-  {
-    name: "Shopping",
-    score: 82,
-    detail: "Supermarkets and retail within easy reach",
-    color: "bg-emerald-500",
-  },
-  {
-    name: "Food & Cafes",
-    score: 76,
-    detail: "Good coverage of cafes, restaurants, and bakeries",
-    color: "bg-amber-500",
-  },
-  {
-    name: "Transport",
-    score: 65,
-    detail: "Useful public transport, but not every route is close",
-    color: "bg-sky-500",
-  },
-  {
-    name: "Health",
-    score: 70,
-    detail: "Pharmacies and clinics nearby for everyday needs",
-    color: "bg-rose-500",
-  },
-  {
-    name: "Fitness",
-    score: 45,
-    detail: "Limited gyms and fitness options in walking distance",
-    color: "bg-violet-500",
-  },
-];
-
 type GeocodeLocation = {
   query: string;
   formattedAddress: string;
@@ -64,6 +31,7 @@ type NearbyPlace = {
   address: string;
   primaryType: string;
   distanceMeters: number;
+  source: "brand" | "generic";
 };
 
 type PlaceGroup = {
@@ -72,9 +40,23 @@ type PlaceGroup = {
   places: NearbyPlace[];
 };
 
+type CategoryScore = {
+  id: string;
+  label: string;
+  score: number;
+  weight: number;
+  colorClass: string;
+  detail: string;
+  count: number;
+  closestDistanceMeters: number | null;
+  explanation: string;
+};
+
 type PlacesSuccess = {
   ok: true;
   groups: PlaceGroup[];
+  scores: CategoryScore[];
+  overallScore: number;
 };
 
 type PlacesFailure = {
@@ -84,6 +66,12 @@ type PlacesFailure = {
 
 type PlacesState = "idle" | "loading" | "success" | "error";
 
+function formatDistance(distanceMeters: number) {
+  return distanceMeters < 1000
+    ? `${distanceMeters} m`
+    : `${(distanceMeters / 1000).toFixed(1)} km`;
+}
+
 export default function Home() {
   const [query, setQuery] = useState("");
   const [searchState, setSearchState] = useState<SearchState>("idle");
@@ -91,12 +79,16 @@ export default function Home() {
   const [error, setError] = useState("");
   const [placesState, setPlacesState] = useState<PlacesState>("idle");
   const [placeGroups, setPlaceGroups] = useState<PlaceGroup[]>([]);
+  const [categoryScores, setCategoryScores] = useState<CategoryScore[]>([]);
+  const [overallScore, setOverallScore] = useState<number | null>(null);
   const [placesError, setPlacesError] = useState("");
 
   async function loadNearbyPlaces(nextLocation: GeocodeLocation) {
     setPlacesState("loading");
     setPlacesError("");
     setPlaceGroups([]);
+    setCategoryScores([]);
+    setOverallScore(null);
 
     try {
       const response = await fetch(
@@ -111,6 +103,8 @@ export default function Home() {
       }
 
       setPlaceGroups(data.groups);
+      setCategoryScores(data.scores);
+      setOverallScore(data.overallScore);
       setPlacesState("success");
     } catch {
       setPlacesError("Nearby places failed to load. Try searching again.");
@@ -134,6 +128,8 @@ export default function Home() {
     setPlacesState("idle");
     setPlacesError("");
     setPlaceGroups([]);
+    setCategoryScores([]);
+    setOverallScore(null);
 
     try {
       const response = await fetch(
@@ -174,9 +170,13 @@ export default function Home() {
               </p>
             </div>
 
-            <div className="w-full rounded-lg border border-emerald-100 bg-emerald-50 p-4 text-left sm:w-40">
-              <p className="text-sm font-medium text-emerald-800">Example score</p>
-              <p className="mt-1 text-4xl font-bold text-emerald-950">72</p>
+            <div className="w-full rounded-lg border border-emerald-100 bg-emerald-50 p-4 text-left sm:w-44">
+              <p className="text-sm font-medium text-emerald-800">
+                {placesState === "success" ? "Overall score" : "Ready to score"}
+              </p>
+              <p className="mt-1 text-4xl font-bold text-emerald-950">
+                {placesState === "loading" ? "..." : overallScore ?? "--"}
+              </p>
               <p className="text-sm text-emerald-800">out of 100</p>
             </div>
           </div>
@@ -203,7 +203,7 @@ export default function Home() {
               />
               <button
                 type="submit"
-                disabled={searchState === "loading"}
+                disabled={searchState === "loading" || placesState === "loading"}
                 className="min-h-12 rounded-md bg-slate-950 px-6 text-base font-semibold text-white transition hover:bg-slate-800 focus:outline-none focus:ring-4 focus:ring-slate-300 disabled:cursor-not-allowed disabled:bg-slate-400"
               >
                 {searchState === "loading" ? "Searching..." : "Search"}
@@ -229,38 +229,62 @@ export default function Home() {
             <div className="mb-4 flex items-center justify-between gap-4">
               <h2 className="text-xl font-bold text-slate-950">Score breakdown</h2>
               <span className="rounded-full bg-slate-100 px-3 py-1 text-sm font-medium text-slate-700">
-                Prototype data
+                {placesState === "success" ? "Live nearby data" : "Search required"}
               </span>
             </div>
 
-            <div className="space-y-4">
-              {scoreCategories.map((category) => (
-                <article
-                  key={category.name}
-                  className="rounded-lg border border-slate-200 bg-white p-4"
-                >
-                  <div className="mb-3 flex items-start justify-between gap-4">
-                    <div>
-                      <h3 className="font-semibold text-slate-950">
-                        {category.name}
-                      </h3>
-                      <p className="mt-1 text-sm leading-6 text-slate-600">
-                        {category.detail}
+            {placesState === "idle" ? (
+              <p className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-600">
+                Search for a location to calculate scores from nearby shops,
+                services, transport, health, food, and fitness options.
+              </p>
+            ) : null}
+
+            {placesState === "loading" ? (
+              <p className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm font-medium text-slate-600">
+                Loading nearby amenities and calculating scores...
+              </p>
+            ) : null}
+
+            {placesState === "error" ? (
+              <p className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-700">
+                {placesError}
+              </p>
+            ) : null}
+
+            {placesState === "success" ? (
+              <div className="space-y-4">
+                {categoryScores.map((category) => (
+                  <article
+                    key={category.id}
+                    className="rounded-lg border border-slate-200 bg-white p-4"
+                  >
+                    <div className="mb-3 flex items-start justify-between gap-4">
+                      <div>
+                        <h3 className="font-semibold text-slate-950">
+                          {category.label}
+                        </h3>
+                        <p className="mt-1 text-sm leading-6 text-slate-600">
+                          {category.explanation}
+                        </p>
+                      </div>
+                      <p className="shrink-0 text-lg font-bold text-slate-950">
+                        {category.score}/100
                       </p>
                     </div>
-                    <p className="shrink-0 text-lg font-bold text-slate-950">
-                      {category.score}/100
+                    <div className="h-2 rounded-full bg-slate-100">
+                      <div
+                        className={`h-2 rounded-full ${category.colorClass}`}
+                        style={{ width: `${category.score}%` }}
+                      />
+                    </div>
+                    <p className="mt-3 text-xs leading-5 text-slate-500">
+                      {category.detail}
                     </p>
-                  </div>
-                  <div className="h-2 rounded-full bg-slate-100">
-                    <div
-                      className={`h-2 rounded-full ${category.color}`}
-                      style={{ width: `${category.score}%` }}
-                    />
-                  </div>
-                </article>
-              ))}
-            </div>
+                  </article>
+                ))}
+              </div>
+            ) : null}
           </div>
         </div>
 
@@ -284,8 +308,8 @@ export default function Home() {
             </div>
             <p className="mt-4 text-sm leading-6 text-slate-600">
               {location
-                ? `Matched as ${location.locationType.toLowerCase().replaceAll("_", " ")}. Nearby amenities are loaded within 1.6 km.`
-                : "A live map can show nearby amenities once the search and places API are connected."}
+                ? `Matched as ${location.locationType.toLowerCase().replaceAll("_", " ")}. Nearby amenities are loaded within 3 km.`
+                : "A live map can show nearby amenities after the scoring and places flow is stable."}
             </p>
           </div>
 
@@ -327,7 +351,7 @@ export default function Home() {
                     </div>
                     {group.places.length > 0 ? (
                       <ul className="space-y-2">
-                        {group.places.slice(0, 3).map((place) => (
+                        {group.places.slice(0, 4).map((place) => (
                           <li
                             key={place.id}
                             className="rounded-md bg-slate-50 px-4 py-3 text-sm"
@@ -337,12 +361,20 @@ export default function Home() {
                                 {place.name}
                               </span>
                               <span className="shrink-0 text-xs font-semibold text-emerald-700">
-                                {place.distanceMeters < 1000
-                                  ? `${place.distanceMeters} m`
-                                  : `${(place.distanceMeters / 1000).toFixed(1)} km`}
+                                {formatDistance(place.distanceMeters)}
                               </span>
                             </div>
-                            <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500">
+                            <div className="mt-2 flex flex-wrap items-center gap-2">
+                              <span className="rounded-full bg-white px-2 py-1 text-xs font-medium text-slate-600 ring-1 ring-slate-200">
+                                {place.source === "brand"
+                                  ? "Brand match"
+                                  : "Nearby place"}
+                              </span>
+                              <span className="text-xs text-slate-500">
+                                {place.primaryType.replaceAll("_", " ")}
+                              </span>
+                            </div>
+                            <p className="mt-2 line-clamp-2 text-xs leading-5 text-slate-500">
                               {place.address}
                             </p>
                           </li>
