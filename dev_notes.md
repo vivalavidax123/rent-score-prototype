@@ -40,6 +40,19 @@ This model is useful for a prototype but is not a final rental quality or proper
 
 Google Maps and Google Places remain the provider for this phase because the app already uses Google Geocoding and Places APIs. Adding another provider before the core score flow is stable would add token/configuration complexity without improving the MVP enough.
 
+## Map Preview
+
+The location preview uses the Google Maps JavaScript API through `NEXT_PUBLIC_MAPS_API_KEY`. The same underlying Google Cloud project can be used as the server key, but the browser-exposed key must be restricted by HTTP referrer.
+
+The first map version shows:
+
+* one primary marker for the searched location
+* category-colored markers for nearby amenities
+* slightly larger markers for brand matches
+* marker popups with name, category, distance, and address
+
+Nearby place latitude and longitude are included in the `/api/places` response so the map can render amenity markers without making extra client-side Places requests.
+
 ## Deferred Work
 
-The map should be added after the scoring/data flow is stable. Deployment, authentication, saved locations, AI summaries, crime data, school quality, and rental price analysis are also deferred.
+Deployment, authentication, saved locations, AI summaries, crime data, school quality, and rental price analysis are deferred. Map/list interactions, such as clicking a list item to focus the matching marker, are also deferred.

@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import { LocationMap } from "./components/LocationMap";
 
 type GeocodeLocation = {
   query: string;
@@ -30,6 +31,8 @@ type NearbyPlace = {
   name: string;
   address: string;
   primaryType: string;
+  latitude: number;
+  longitude: number;
   distanceMeters: number;
   source: "brand" | "generic";
 };
@@ -291,25 +294,11 @@ export default function Home() {
         <aside className="space-y-6">
           <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
             <h2 className="text-xl font-bold text-slate-950">Location preview</h2>
-            <div className="mt-5 aspect-[4/3] overflow-hidden rounded-lg border border-slate-200 bg-[#dfe8e3]">
-              <div className="grid h-full grid-cols-3 grid-rows-3 gap-1 p-3">
-                <div className="rounded-md bg-white/70" />
-                <div className="rounded-md bg-emerald-200" />
-                <div className="rounded-md bg-white/70" />
-                <div className="rounded-md bg-sky-200" />
-                <div className="relative rounded-md bg-white shadow-sm">
-                  <div className="absolute left-1/2 top-1/2 h-5 w-5 -translate-x-1/2 -translate-y-1/2 rounded-full border-4 border-white bg-emerald-600 shadow-md" />
-                </div>
-                <div className="rounded-md bg-white/70" />
-                <div className="rounded-md bg-white/70" />
-                <div className="rounded-md bg-amber-200" />
-                <div className="rounded-md bg-white/70" />
-              </div>
-            </div>
+            <LocationMap location={location} placeGroups={placeGroups} />
             <p className="mt-4 text-sm leading-6 text-slate-600">
               {location
-                ? `Matched as ${location.locationType.toLowerCase().replaceAll("_", " ")}. Nearby amenities are loaded within 3 km.`
-                : "A live map can show nearby amenities after the scoring and places flow is stable."}
+                ? `Matched as ${location.locationType.toLowerCase().replaceAll("_", " ")}. Map markers show the searched location and nearby amenities within 3 km.`
+                : "Search for a location to show nearby amenities on the map."}
             </p>
           </div>
 

@@ -7,6 +7,8 @@ export type NearbyPlace = {
   name: string;
   address: string;
   primaryType: string;
+  latitude: number;
+  longitude: number;
   distanceMeters: number;
   source: PlaceSource;
 };

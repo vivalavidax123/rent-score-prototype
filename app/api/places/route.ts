@@ -192,6 +192,8 @@ function addPlaceToMap({
     name: place.displayName.text,
     address: place.formattedAddress ?? "Address unavailable",
     primaryType: place.primaryType ?? "place",
+    latitude: placeLatitude,
+    longitude: placeLongitude,
     distanceMeters,
     source,
   });
