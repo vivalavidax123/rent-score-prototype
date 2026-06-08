@@ -1,46 +1,6 @@
 import { rentScoreCategories } from "./categories";
 
-export type PlaceSource = "brand" | "generic";
-
-export type TransportService = {
-  routeNumber: string;
-  destination: string;
-  departureTime: string | null;
-};
-
-export type NearbyPlace = {
-  id: string;
-  name: string;
-  address: string;
-  primaryType: string;
-  latitude: number;
-  longitude: number;
-  distanceMeters: number;
-  rating: number | null;
-  userRatingCount: number;
-  source: PlaceSource;
-  transportServices?: TransportService[];
-};
-
-export type PlaceGroup = {
-  id: string;
-  label: string;
-  radiusMeters: number;
-  places: NearbyPlace[];
-};
-
-export type CategoryScore = {
-  id: string;
-  label: string;
-  score: number;
-  weight: number;
-  colorClass: string;
-  detail: string;
-  count: number;
-  closestDistanceMeters: number | null;
-  radiusMeters: number;
-  explanation: string;
-};
+import type { PlaceGroup } from "./types";
 
 function getDistanceScore(distanceMeters: number | null, radiusMeters: number) {
   if (distanceMeters === null) {
