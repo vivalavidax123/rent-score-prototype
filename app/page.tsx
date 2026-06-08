@@ -37,6 +37,11 @@ type NearbyPlace = {
   rating: number | null;
   userRatingCount: number;
   source: "brand" | "generic";
+  transportServices?: {
+    routeNumber: string;
+    destination: string;
+    departureTime: string | null;
+  }[];
 };
 
 type PlaceGroup = {
@@ -106,6 +111,29 @@ function formatGroupScope(group: PlaceGroup) {
 
 function formatPlaceType(primaryType: string) {
   return primaryType.replaceAll("_", " ");
+}
+
+function formatDepartureTime(value: string | null) {
+  if (!value) {
+    return null;
+  }
+
+  const gtfsTime = value.match(/^(\d{1,2}):(\d{2})/);
+
+  if (gtfsTime) {
+    return `${gtfsTime[1].padStart(2, "0")}:${gtfsTime[2]}`;
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  return date.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 export default function Home() {
@@ -388,11 +416,6 @@ export default function Home() {
                               </span>
                             </div>
                             <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                              <span className="rounded-full bg-white px-1.5 py-0.5 text-[11px] font-medium text-slate-600 ring-1 ring-slate-200">
-                                {place.source === "brand"
-                                  ? "Brand match"
-                                  : "Nearby place"}
-                              </span>
                               {group.id !== "transport" ? (
                                 <span className="rounded-full bg-white px-1.5 py-0.5 text-[11px] font-medium text-slate-600 ring-1 ring-slate-200">
                                   {formatReviewSummary(place)}
@@ -405,6 +428,36 @@ export default function Home() {
                             <p className="mt-1 line-clamp-1 text-[11px] leading-4 text-slate-500">
                               {place.address}
                             </p>
+                            {group.id === "transport" &&
+                            place.primaryType === "bus_stop" &&
+                            place.transportServices?.length ? (
+                              <ul className="mt-2 space-y-1">
+                                {place.transportServices.map((service) => {
+                                  const departureTime = formatDepartureTime(
+                                    service.departureTime,
+                                  );
+
+                                  return (
+                                    <li
+                                      key={`${service.routeNumber}-${service.destination}`}
+                                      className="flex items-center gap-2 text-[11px] leading-4 text-slate-600"
+                                    >
+                                      <span className="min-w-8 rounded bg-sky-100 px-1.5 py-0.5 text-center font-semibold text-sky-800">
+                                        {service.routeNumber}
+                                      </span>
+                                      <span className="min-w-0 flex-1 truncate">
+                                        to {service.destination}
+                                      </span>
+                                      {departureTime ? (
+                                        <span className="shrink-0 text-slate-500">
+                                          {departureTime}
+                                        </span>
+                                      ) : null}
+                                    </li>
+                                  );
+                                })}
+                              </ul>
+                            ) : null}
                           </li>
                         ))}
                       </ul>

@@ -7,6 +7,7 @@ import {
   scorePlaceGroups,
   type NearbyPlace,
   type PlaceSource,
+  type TransportService,
 } from "@/app/lib/scoring";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
@@ -34,8 +35,52 @@ type GooglePlacesResponse = {
   };
 };
 
+type TransitlandRoute = {
+  route_short_name?: string;
+  route_long_name?: string;
+  route_id?: string;
+};
+
+type TransitlandTrip = {
+  trip_headsign?: string;
+  trip_short_name?: string;
+  route?: TransitlandRoute;
+};
+
+type TransitlandStopTimeEvent = {
+  estimated?: string;
+  scheduled?: string;
+};
+
+type TransitlandDeparture = {
+  stop_headsign?: string;
+  departure_time?: string;
+  departure?: TransitlandStopTimeEvent;
+  trip?: TransitlandTrip;
+};
+
+type TransitlandStop = {
+  id?: number;
+  onestop_id?: string;
+  stop_id?: string;
+  stop_name?: string;
+  stop_desc?: string;
+  stop_code?: string;
+  geometry?: {
+    coordinates?: [number, number];
+  };
+  departures?: TransitlandDeparture[];
+};
+
+type TransitlandStopsResponse = {
+  stops?: TransitlandStop[];
+};
+
 const transportBusRadiusMeters = 500;
 const maxTransportBusStops = 4;
+const maxTransportBusServicesPerStop = 4;
+const transitlandDepartureWindowSeconds = 7200;
+const transitlandBaseUrl = "https://transit.land/api/v2/rest";
 let vlineStationNamesPromise: Promise<Set<string>> | null = null;
 
 function parseCoordinate(value: string | null) {
@@ -274,6 +319,13 @@ function withPrimaryType(place: NearbyPlace, primaryType: string) {
   return { ...place, primaryType };
 }
 
+function withTransportServices(
+  place: NearbyPlace,
+  transportServices: TransportService[],
+) {
+  return { ...place, transportServices };
+}
+
 function collectPlaces({
   googlePlaces,
   origin,
@@ -306,6 +358,213 @@ function collectPlaces({
   return Array.from(placesById.values());
 }
 
+function getTransitlandStopKey(stop: TransitlandStop) {
+  return stop.onestop_id ?? (typeof stop.id === "number" ? String(stop.id) : null);
+}
+
+function getTransitlandRouteNumber(departure: TransitlandDeparture) {
+  return (
+    departure.trip?.route?.route_short_name ??
+    departure.trip?.route?.route_id ??
+    departure.trip?.trip_short_name ??
+    ""
+  ).trim();
+}
+
+function getTransitlandDestination(departure: TransitlandDeparture) {
+  return (
+    departure.stop_headsign ??
+    departure.trip?.trip_headsign ??
+    departure.trip?.route?.route_long_name ??
+    ""
+  ).trim();
+}
+
+function getTransitlandDepartureTime(departure: TransitlandDeparture) {
+  return (
+    departure.departure?.estimated ??
+    departure.departure?.scheduled ??
+    departure.departure_time ??
+    null
+  );
+}
+
+function getTransitlandBusServices(departures: TransitlandDeparture[] = []) {
+  const servicesByRouteAndDestination = new Map<string, TransportService>();
+
+  for (const departure of departures) {
+    const routeNumber = getTransitlandRouteNumber(departure);
+    const destination = getTransitlandDestination(departure);
+
+    if (!routeNumber || !destination) {
+      continue;
+    }
+
+    const key = `${normalizeText(routeNumber)}:${normalizeText(destination)}`;
+
+    if (!servicesByRouteAndDestination.has(key)) {
+      servicesByRouteAndDestination.set(key, {
+        routeNumber,
+        destination,
+        departureTime: getTransitlandDepartureTime(departure),
+      });
+    }
+
+    if (servicesByRouteAndDestination.size >= maxTransportBusServicesPerStop) {
+      break;
+    }
+  }
+
+  return Array.from(servicesByRouteAndDestination.values());
+}
+
+async function fetchTransitlandJson<T>({
+  apiKey,
+  pathName,
+  searchParams,
+}: {
+  apiKey: string;
+  pathName: string;
+  searchParams: Record<string, string>;
+}) {
+  const url = new URL(`${transitlandBaseUrl}${pathName}`);
+
+  for (const [key, value] of Object.entries(searchParams)) {
+    url.searchParams.set(key, value);
+  }
+
+  const response = await fetch(url, {
+    cache: "no-store",
+    headers: {
+      apikey: apiKey,
+    },
+  });
+
+  if (!response.ok) {
+    return null;
+  }
+
+  return (await response.json()) as T;
+}
+
+async function fetchTransitlandBusDepartures({
+  apiKey,
+  stop,
+}: {
+  apiKey: string;
+  stop: TransitlandStop;
+}) {
+  const stopKey = getTransitlandStopKey(stop);
+
+  if (!stopKey) {
+    return [];
+  }
+
+  const data = await fetchTransitlandJson<TransitlandStopsResponse>({
+    apiKey,
+    pathName: `/stops/${encodeURIComponent(stopKey)}/departures`,
+    searchParams: {
+      next: String(transitlandDepartureWindowSeconds),
+      limit: "20",
+      include_geometry: "false",
+    },
+  });
+
+  return getTransitlandBusServices(data?.stops?.[0]?.departures);
+}
+
+async function fetchTransitlandBusStops({
+  apiKey,
+  latitude,
+  longitude,
+}: {
+  apiKey: string;
+  latitude: number;
+  longitude: number;
+}) {
+  const origin = { latitude, longitude };
+  const data = await fetchTransitlandJson<TransitlandStopsResponse>({
+    apiKey,
+    pathName: "/stops",
+    searchParams: {
+      lat: String(latitude),
+      lon: String(longitude),
+      radius: String(transportBusRadiusMeters),
+      served_by_route_type: "3",
+      limit: "20",
+    },
+  });
+
+  if (!data?.stops) {
+    return [];
+  }
+
+  const stops = sortPlacesByDistance(
+    data.stops.flatMap((stop) => {
+      const [stopLongitude, stopLatitude] = stop.geometry?.coordinates ?? [];
+
+      if (
+        !stop.stop_name ||
+        typeof stopLatitude !== "number" ||
+        typeof stopLongitude !== "number"
+      ) {
+        return [];
+      }
+
+      const stopKey = getTransitlandStopKey(stop) ?? stop.stop_id;
+
+      if (!stopKey) {
+        return [];
+      }
+
+      const distanceMeters = getDistanceMeters(origin, {
+        latitude: stopLatitude,
+        longitude: stopLongitude,
+      });
+
+      if (distanceMeters > transportBusRadiusMeters) {
+        return [];
+      }
+
+      return [
+        {
+          stop,
+          place: {
+            id: `transitland:${stopKey}`,
+            name: stop.stop_name,
+            address: stop.stop_desc ?? stop.stop_code ?? "Stop details unavailable",
+            primaryType: "bus_stop",
+            latitude: stopLatitude,
+            longitude: stopLongitude,
+            distanceMeters,
+            rating: null,
+            userRatingCount: 0,
+            source: "generic" as const,
+          },
+        },
+      ];
+    }).map(({ place }) => place),
+  ).slice(0, maxTransportBusStops);
+
+  const stopsByPlaceId = new Map<string, TransitlandStop>(
+    data.stops.flatMap((stop) => {
+      const stopKey = getTransitlandStopKey(stop) ?? stop.stop_id;
+      return stopKey ? [[`transitland:${stopKey}`, stop] as const] : [];
+    }),
+  );
+
+  return Promise.all(
+    stops.map(async (place) => {
+      const stop = stopsByPlaceId.get(place.id);
+      const transportServices = stop
+        ? await fetchTransitlandBusDepartures({ apiKey, stop })
+        : [];
+
+      return withTransportServices(place, transportServices);
+    }),
+  );
+}
+
 async function fetchPlacesForTransportCategory({
   apiKey,
   category,
@@ -318,11 +577,13 @@ async function fetchPlacesForTransportCategory({
   longitude: number;
 }) {
   const origin = { latitude, longitude };
-  const [busResults, metroResults, vlineResults] = await Promise.all([
+  const transitlandApiKey = process.env.TRANSITLAND_API_KEY;
+  const [busResults, metroResults, vlineResults, transitlandBusStops] =
+    await Promise.all([
     fetchPlacesForTypes({
       apiKey,
       category,
-      placeTypes: ["bus_station"],
+      placeTypes: ["bus_stop", "bus_station"],
       latitude,
       longitude,
       radiusMeters: transportBusRadiusMeters,
@@ -341,9 +602,16 @@ async function fetchPlacesForTransportCategory({
       latitude,
       longitude,
     }),
+    transitlandApiKey
+      ? fetchTransitlandBusStops({
+          apiKey: transitlandApiKey,
+          latitude,
+          longitude,
+        }).catch(() => [])
+      : Promise.resolve([]),
   ]);
 
-  const busStops = sortPlacesByDistance(
+  const googleBusStops = sortPlacesByDistance(
     collectPlaces({
       googlePlaces: busResults,
       origin,
@@ -354,6 +622,8 @@ async function fetchPlacesForTransportCategory({
   )
     .slice(0, maxTransportBusStops)
     .map((place) => withPrimaryType(place, "bus_stop"));
+  const busStops =
+    transitlandBusStops.length > 0 ? transitlandBusStops : googleBusStops;
   const railPlaces = sortPlacesByDistance(
     collectPlaces({
       googlePlaces: metroResults,

@@ -177,7 +177,10 @@ Create a `.env.local` file:
 ```env
 GOOGLE_MAPS_API_KEY=YOUR_API_KEY
 NEXT_PUBLIC_MAPS_API_KEY=YOUR_PUBLIC_KEY
+TRANSITLAND_API_KEY=YOUR_TRANSITLAND_KEY
 ```
+
+`TRANSITLAND_API_KEY` is optional and is used to show bus route numbers and destinations for nearby bus stops.
 
 ---
 

@@ -19,6 +19,11 @@ type NearbyPlace = {
   rating: number | null;
   userRatingCount: number;
   source: "brand" | "generic";
+  transportServices?: {
+    routeNumber: string;
+    destination: string;
+    departureTime: string | null;
+  }[];
 };
 
 type PlaceGroup = {

@@ -2,6 +2,12 @@ import { rentScoreCategories } from "./categories";
 
 export type PlaceSource = "brand" | "generic";
 
+export type TransportService = {
+  routeNumber: string;
+  destination: string;
+  departureTime: string | null;
+};
+
 export type NearbyPlace = {
   id: string;
   name: string;
@@ -13,6 +19,7 @@ export type NearbyPlace = {
   rating: number | null;
   userRatingCount: number;
   source: PlaceSource;
+  transportServices?: TransportService[];
 };
 
 export type PlaceGroup = {
