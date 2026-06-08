@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, KeyboardEvent, useEffect, useRef, useState } from "react";
 import { LocationMap } from "./components/LocationMap";
 
 type GeocodeLocation = {
@@ -25,6 +25,23 @@ type GeocodeFailure = {
 };
 
 type SearchState = "idle" | "loading" | "success" | "error";
+
+type AddressSuggestion = {
+  placeId: string;
+  text: string;
+  mainText: string;
+  secondaryText: string;
+};
+
+type AutocompleteSuccess = {
+  ok: true;
+  suggestions: AddressSuggestion[];
+};
+
+type AutocompleteFailure = {
+  ok: false;
+  error: string;
+};
 
 type NearbyPlace = {
   id: string;
@@ -103,7 +120,7 @@ function formatReviewSummary(place: NearbyPlace) {
 
 function formatGroupScope(group: PlaceGroup) {
   if (group.id === "transport") {
-    return "bus stops within 500 m + nearest stations";
+    return "bus stops within 1 km or closest found + nearest stations";
   }
 
   return `${group.places.length} found within ${formatRadius(group.radiusMeters)}`;
@@ -138,6 +155,10 @@ function formatDepartureTime(value: string | null) {
 
 export default function Home() {
   const [query, setQuery] = useState("");
+  const [suggestions, setSuggestions] = useState<AddressSuggestion[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(-1);
+  const [selectedSuggestionText, setSelectedSuggestionText] = useState("");
   const [searchState, setSearchState] = useState<SearchState>("idle");
   const [location, setLocation] = useState<GeocodeLocation | null>(null);
   const [error, setError] = useState("");
@@ -146,6 +167,62 @@ export default function Home() {
   const [categoryScores, setCategoryScores] = useState<CategoryScore[]>([]);
   const [overallScore, setOverallScore] = useState<number | null>(null);
   const [placesError, setPlacesError] = useState("");
+  const autocompleteRequestId = useRef(0);
+
+  useEffect(() => {
+    const trimmedQuery = query.trim();
+
+    if (
+      trimmedQuery.length < 3 ||
+      trimmedQuery === selectedSuggestionText ||
+      searchState === "loading"
+    ) {
+      return;
+    }
+
+    const requestId = autocompleteRequestId.current + 1;
+    autocompleteRequestId.current = requestId;
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(async () => {
+      try {
+        const response = await fetch(
+          `/api/autocomplete?query=${encodeURIComponent(trimmedQuery)}`,
+          { signal: controller.signal },
+        );
+        const data = (await response.json()) as
+          | AutocompleteSuccess
+          | AutocompleteFailure;
+
+        if (requestId !== autocompleteRequestId.current) {
+          return;
+        }
+
+        if (!response.ok || !data.ok) {
+          setSuggestions([]);
+          setShowSuggestions(false);
+          setActiveSuggestionIndex(-1);
+          return;
+        }
+
+        setSuggestions(data.suggestions);
+        setShowSuggestions(data.suggestions.length > 0);
+        setActiveSuggestionIndex(data.suggestions.length > 0 ? 0 : -1);
+      } catch {
+        if (controller.signal.aborted) {
+          return;
+        }
+
+        setSuggestions([]);
+        setShowSuggestions(false);
+        setActiveSuggestionIndex(-1);
+      }
+    }, 250);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+      controller.abort();
+    };
+  }, [query, searchState, selectedSuggestionText]);
 
   async function loadNearbyPlaces(nextLocation: GeocodeLocation) {
     setPlacesState("loading");
@@ -178,6 +255,7 @@ export default function Home() {
 
   async function handleSearch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    setShowSuggestions(false);
 
     const trimmedQuery = query.trim();
 
@@ -213,6 +291,45 @@ export default function Home() {
     } catch {
       setError("Search failed. Check your connection and try again.");
       setSearchState("error");
+    }
+  }
+
+  function handleSuggestionSelect(suggestion: AddressSuggestion) {
+    setQuery(suggestion.text);
+    setSelectedSuggestionText(suggestion.text);
+    setSuggestions([]);
+    setShowSuggestions(false);
+    setActiveSuggestionIndex(-1);
+  }
+
+  function handleLocationKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (!showSuggestions || suggestions.length === 0) {
+      return;
+    }
+
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setActiveSuggestionIndex((index) => (index + 1) % suggestions.length);
+      return;
+    }
+
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setActiveSuggestionIndex(
+        (index) => (index - 1 + suggestions.length) % suggestions.length,
+      );
+      return;
+    }
+
+    if (event.key === "Enter" && activeSuggestionIndex >= 0) {
+      event.preventDefault();
+      handleSuggestionSelect(suggestions[activeSuggestionIndex]);
+      return;
+    }
+
+    if (event.key === "Escape") {
+      setShowSuggestions(false);
+      setActiveSuggestionIndex(-1);
     }
   }
 
@@ -256,15 +373,78 @@ export default function Home() {
               Address or suburb
             </label>
             <div className="flex flex-col gap-3 sm:flex-row">
-              <input
-                id="location"
-                type="text"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Try: Parramatta NSW"
-                autoComplete="street-address"
-                className="min-h-12 flex-1 rounded-md border border-slate-300 bg-white px-4 text-base text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100"
-              />
+              <div className="relative flex-1">
+                <input
+                  id="location"
+                  type="text"
+                  value={query}
+                  onChange={(event) => {
+                    const nextQuery = event.target.value;
+
+                    setQuery(nextQuery);
+                    setSelectedSuggestionText("");
+
+                    if (nextQuery.trim().length < 3) {
+                      setSuggestions([]);
+                      setShowSuggestions(false);
+                      setActiveSuggestionIndex(-1);
+                    }
+                  }}
+                  onFocus={() => {
+                    if (suggestions.length > 0) {
+                      setShowSuggestions(true);
+                    }
+                  }}
+                  onBlur={() => {
+                    window.setTimeout(() => setShowSuggestions(false), 120);
+                  }}
+                  onKeyDown={handleLocationKeyDown}
+                  placeholder="Try: Parramatta NSW"
+                  autoComplete="off"
+                  aria-autocomplete="list"
+                  aria-controls="location-suggestions"
+                  className="min-h-12 w-full rounded-md border border-slate-300 bg-white px-4 text-base text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100"
+                />
+                {showSuggestions ? (
+                  <div className="absolute left-0 right-0 top-[calc(100%+0.375rem)] z-20 overflow-hidden rounded-md border border-slate-200 bg-white shadow-lg">
+                    <ul id="location-suggestions" role="listbox" className="py-1">
+                      {suggestions.map((suggestion, index) => (
+                        <li
+                          key={suggestion.placeId}
+                          role="option"
+                          aria-selected={index === activeSuggestionIndex}
+                        >
+                          <button
+                            type="button"
+                            onMouseDown={(event) => {
+                              event.preventDefault();
+                              handleSuggestionSelect(suggestion);
+                            }}
+                            onMouseEnter={() => setActiveSuggestionIndex(index)}
+                            className={`w-full px-4 py-2.5 text-left transition ${
+                              index === activeSuggestionIndex
+                                ? "bg-emerald-50"
+                                : "bg-white hover:bg-slate-50"
+                            }`}
+                          >
+                            <span className="block truncate text-sm font-semibold text-slate-900">
+                              {suggestion.mainText}
+                            </span>
+                            {suggestion.secondaryText ? (
+                              <span className="mt-0.5 block truncate text-xs text-slate-500">
+                                {suggestion.secondaryText}
+                              </span>
+                            ) : null}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                    <div className="border-t border-slate-100 px-4 py-1.5 text-right text-[11px] font-medium text-slate-400">
+                      Powered by Google
+                    </div>
+                  </div>
+                ) : null}
+              </div>
               <button
                 type="submit"
                 disabled={searchState === "loading" || placesState === "loading"}

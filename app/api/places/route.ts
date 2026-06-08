@@ -76,7 +76,8 @@ type TransitlandStopsResponse = {
   stops?: TransitlandStop[];
 };
 
-const transportBusRadiusMeters = 500;
+const transportBusRadiusMeters = 1000;
+const transportBusFallbackRadiusMeters = 5000;
 const maxTransportBusStops = 4;
 const maxTransportBusServicesPerStop = 4;
 const transitlandDepartureWindowSeconds = 7200;
@@ -477,10 +478,12 @@ async function fetchTransitlandBusStops({
   apiKey,
   latitude,
   longitude,
+  radiusMeters,
 }: {
   apiKey: string;
   latitude: number;
   longitude: number;
+  radiusMeters: number;
 }) {
   const origin = { latitude, longitude };
   const data = await fetchTransitlandJson<TransitlandStopsResponse>({
@@ -489,7 +492,7 @@ async function fetchTransitlandBusStops({
     searchParams: {
       lat: String(latitude),
       lon: String(longitude),
-      radius: String(transportBusRadiusMeters),
+      radius: String(radiusMeters),
       served_by_route_type: "3",
       limit: "20",
     },
@@ -522,7 +525,7 @@ async function fetchTransitlandBusStops({
         longitude: stopLongitude,
       });
 
-      if (distanceMeters > transportBusRadiusMeters) {
+      if (distanceMeters > radiusMeters) {
         return [];
       }
 
@@ -578,7 +581,7 @@ async function fetchPlacesForTransportCategory({
 }) {
   const origin = { latitude, longitude };
   const transitlandApiKey = process.env.TRANSITLAND_API_KEY;
-  const [busResults, metroResults, vlineResults, transitlandBusStops] =
+  const [nearbyBusResults, fallbackBusResults, metroResults, vlineResults] =
     await Promise.all([
     fetchPlacesForTypes({
       apiKey,
@@ -587,6 +590,14 @@ async function fetchPlacesForTransportCategory({
       latitude,
       longitude,
       radiusMeters: transportBusRadiusMeters,
+    }),
+    fetchPlacesForTypes({
+      apiKey,
+      category,
+      placeTypes: ["bus_stop", "bus_station"],
+      latitude,
+      longitude,
+      radiusMeters: transportBusFallbackRadiusMeters,
     }),
     fetchPlacesForTypes({
       apiKey,
@@ -602,18 +613,33 @@ async function fetchPlacesForTransportCategory({
       latitude,
       longitude,
     }),
+  ]);
+  const transitlandBusStops =
     transitlandApiKey
-      ? fetchTransitlandBusStops({
+      ? await fetchTransitlandBusStops({
           apiKey: transitlandApiKey,
           latitude,
           longitude,
+          radiusMeters: transportBusRadiusMeters,
         }).catch(() => [])
-      : Promise.resolve([]),
-  ]);
+      : [];
+  const transitlandFallbackBusStops =
+    transitlandApiKey && transitlandBusStops.length === 0
+      ? await fetchTransitlandBusStops({
+          apiKey: transitlandApiKey,
+          latitude,
+          longitude,
+          radiusMeters: transportBusFallbackRadiusMeters,
+        }).catch(() => [])
+      : [];
+  const transitlandPreferredBusStops =
+    transitlandBusStops.length > 0
+      ? transitlandBusStops
+      : transitlandFallbackBusStops;
 
-  const googleBusStops = sortPlacesByDistance(
+  const nearbyGoogleBusStops = sortPlacesByDistance(
     collectPlaces({
-      googlePlaces: busResults,
+      googlePlaces: nearbyBusResults,
       origin,
       category,
       source: "generic",
@@ -622,8 +648,25 @@ async function fetchPlacesForTransportCategory({
   )
     .slice(0, maxTransportBusStops)
     .map((place) => withPrimaryType(place, "bus_stop"));
+  const fallbackGoogleBusStops = sortPlacesByDistance(
+    collectPlaces({
+      googlePlaces: fallbackBusResults,
+      origin,
+      category,
+      source: "generic",
+      radiusMeters: transportBusFallbackRadiusMeters,
+    }),
+  )
+    .slice(0, maxTransportBusStops)
+    .map((place) => withPrimaryType(place, "bus_stop"));
+  const googleBusStops =
+    nearbyGoogleBusStops.length > 0
+      ? nearbyGoogleBusStops
+      : fallbackGoogleBusStops;
   const busStops =
-    transitlandBusStops.length > 0 ? transitlandBusStops : googleBusStops;
+    transitlandPreferredBusStops.length > 0
+      ? transitlandPreferredBusStops
+      : googleBusStops;
   const railPlaces = sortPlacesByDistance(
     collectPlaces({
       googlePlaces: metroResults,

@@ -31,6 +31,8 @@ This keeps mixed-use results such as fast food, fuel stations, convenience store
 
 ## Places Retrieval
 
+The search bar uses a server-side autocomplete route backed by Google Places Autocomplete (New). Suggestions are restricted to Australia, keep the Google API key server-side, and feed the selected suggestion text into the existing geocoding flow.
+
 The Places API route combines two kinds of results:
 
 * Brand matches, such as Woolworths, Coles, Chemist Warehouse, Australia Post, or major gyms.
@@ -42,7 +44,7 @@ Category-level duplicate place IDs are filtered after retrieval using the catego
 
 Within each category, returned places are sorted for display by Google review count, then rating, then distance. Scoring still calculates closest distance from all places in the category, so popularity ordering does not weaken the proximity score.
 
-Transport is the exception to the general category retrieval. It shows up to four nearest bus stops within 500 m, one nearest metro/train station from nearby rail station results, and one nearest V/Line station with no hard distance cutoff. Bus stops query both Google Places `bus_stop` and `bus_station` types so ordinary stop-level results are not missed.
+Transport is the exception to the general category retrieval. It shows up to four nearest bus stops within 1 km, or the closest bus stops from a wider fallback search if none are found within 1 km. It also shows one nearest metro/train station from nearby rail station results, and one nearest V/Line station with no hard distance cutoff. Bus stops query both Google Places `bus_stop` and `bus_station` types so ordinary stop-level results are not missed.
 
 When `TRANSITLAND_API_KEY` is configured, the transport lookup prefers Transitland bus stop data and enriches each returned bus stop with upcoming distinct route numbers, destinations, and departure times. Google Places remains the fallback for bus stops if Transitland is not configured or does not return nearby matches. V/Line classification is based on the local station list in `app/lib/vline-stations.txt`, which avoids relying on Google Places to label regional rail stations consistently. Transport rows do not show review counts because popularity is less useful for stops and stations.
 

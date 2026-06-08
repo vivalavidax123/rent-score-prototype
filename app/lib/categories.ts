@@ -56,7 +56,7 @@ export const rentScoreCategories: RentScoreCategory[] = [
     radiusMeters: defaultSearchRadiusMeters,
     colorClass: "bg-sky-500",
     detail:
-      "Bus stops within 500 m, plus the nearest metro/train and V/Line stations",
+      "Bus stops within 1 km, or closest bus stops if none are found nearby, plus the nearest metro/train and V/Line stations",
     brandTerms: ["Sydney Trains", "Metro station", "light rail station"],
     placeTypes: ["train_station", "bus_station", "subway_station", "light_rail_station"],
   },
