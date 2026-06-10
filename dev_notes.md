@@ -6,6 +6,29 @@ The application is a functional prototype for evaluating rental locations by nea
 
 The UI direction is now amenities-first. Overall score and category scores are intentionally compact summary elements, while nearby amenities, the map, and additional location indicators carry the main result detail. This keeps the interface closer to a decision dashboard than a score report.
 
+## Full-Stack Status
+
+The project can be described as a full-stack Next.js prototype because it includes:
+
+* a React/Next.js frontend
+* server-side route handlers under `app/api/*`
+* API integrations with Google Places, Google Geocoding, Google Maps, and optional Transitland
+* backend business logic for category retrieval, filtering, deduplication, scoring, and transport enrichment
+* environment-based server and browser API key configuration
+
+It should not yet be described as a production full-stack platform. The backend layer is request/response API orchestration rather than a persistent application backend.
+
+Missing production-grade full-stack pieces:
+
+* **Database:** needed for saved locations, cached API results, historical scores, user preferences, and imported external datasets.
+* **Authentication:** needed for accounts, saved searches, personal comparisons, and user-specific settings.
+* **Persistence layer:** no ORM, migrations, schema management, or repository/data-access boundary exists yet.
+* **Backend operations:** no rate limiting, request caching strategy, background jobs, observability, structured logging, or error tracking.
+* **Admin/data management:** category weights and brand lists are code-managed; there is no admin UI or config storage.
+* **First-party datasets:** rent trends, crime/safety, schools, childcare, population density, and planning/development signals are placeholders until dedicated sources are integrated.
+
+Recommended next full-stack milestone: add database persistence for searched locations and cached score results. That would create the foundation for saved locations, comparison history, rate-limit protection, and later dataset ingestion.
+
 ## Category Configuration
 
 Category metadata lives in `app/lib/categories.ts` instead of inside the Places API route. This keeps one source of truth for:

@@ -110,6 +110,21 @@ The overall score is calculated using weighted averages across all categories.
 
 ---
 
+# Full-Stack Status
+
+This is a full-stack Next.js prototype: the frontend UI, API routes, scoring/business logic, and third-party data integrations live in one application.
+
+It is not yet a production full-stack platform. The main missing pieces are:
+
+* Database persistence for saved searches, cached location results, historical scores, and user preferences
+* Authentication and user sessions
+* ORM or data access layer with migrations
+* Admin tooling for managing scoring weights and category configuration outside code
+* Production backend safeguards such as rate limiting, request caching, observability, background jobs, and error tracking
+* First-party or ingested datasets for rent trends, safety, schools, population density, and planning data
+
+---
+
 # Project Structure
 
 ```text
