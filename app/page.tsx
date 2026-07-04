@@ -84,7 +84,6 @@ export default function Home() {
             setSelectedSuggestionText={setSelectedSuggestionText}
             searchState={searchState}
             placesState={placesState}
-            location={location}
             error={error}
             handleSearch={handleSearch}
             handleSuggestionSelect={handleSuggestionSelect}
@@ -99,17 +98,11 @@ export default function Home() {
             onToggleSaved={toggleSaved}
           />
 
-          {placesState === "success" && resultFromCache && (
-            <p className="mt-3 text-xs text-slate-500">
-              Loaded from saved results — this location was scored within the
-              last 24 hours, so no new map lookups were needed.
-            </p>
-          )}
-
           <ScoreBreakdown
             placesState={placesState}
             categoryScores={categoryScores}
             placesError={placesError}
+            resultFromCache={resultFromCache}
           />
 
           <NearbyPlacesList

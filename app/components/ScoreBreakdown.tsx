@@ -4,6 +4,7 @@ type ScoreBreakdownProps = {
   placesState: PlacesState;
   categoryScores: CategoryScore[];
   placesError: string;
+  resultFromCache: boolean;
 };
 
 function formatDistance(distanceMeters: number | null) {
@@ -16,13 +17,32 @@ function formatDistance(distanceMeters: number | null) {
     : `${(distanceMeters / 1000).toFixed(1)} km`;
 }
 
-export function ScoreBreakdown({ placesState, categoryScores, placesError }: ScoreBreakdownProps) {
+export function ScoreBreakdown({
+  placesState,
+  categoryScores,
+  placesError,
+  resultFromCache,
+}: ScoreBreakdownProps) {
+  const badgeLabel =
+    placesState !== "success"
+      ? "Search required"
+      : resultFromCache
+        ? "Cached result"
+        : "Live nearby data";
+
   return (
     <div className="mt-5">
       <div className="mb-3 flex items-center justify-between gap-3">
         <h2 className="text-base font-bold text-slate-950">Category scores</h2>
-        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
-          {placesState === "success" ? "Live nearby data" : "Search required"}
+        <span
+          className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700"
+          title={
+            resultFromCache
+              ? "This location was scored within the last 24 hours, so the saved result was reused without new map lookups."
+              : undefined
+          }
+        >
+          {badgeLabel}
         </span>
       </div>
 

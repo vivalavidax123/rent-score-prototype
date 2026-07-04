@@ -1,5 +1,5 @@
 import type { FormEvent, KeyboardEvent } from "react";
-import type { AddressSuggestion, GeocodeLocation, SearchState, PlacesState } from "../lib/types";
+import type { AddressSuggestion, SearchState, PlacesState } from "../lib/types";
 
 type SearchFormProps = {
   query: string;
@@ -13,7 +13,6 @@ type SearchFormProps = {
   setSelectedSuggestionText: (val: string) => void;
   searchState: SearchState;
   placesState: PlacesState;
-  location: GeocodeLocation | null;
   error: string;
   handleSearch: (event: FormEvent<HTMLFormElement>) => void;
   handleSuggestionSelect: (suggestion: AddressSuggestion) => void;
@@ -32,7 +31,6 @@ export function SearchForm({
   setSelectedSuggestionText,
   searchState,
   placesState,
-  location,
   error,
   handleSearch,
   handleSuggestionSelect,
@@ -134,15 +132,6 @@ export function SearchForm({
         <p className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
           {error}
         </p>
-      ) : null}
-      {searchState === "success" && location ? (
-        <div className="mt-3 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
-          <p className="font-semibold">{location.formattedAddress}</p>
-          <p className="mt-1 text-emerald-800">
-            {location.latitude.toFixed(5)},{" "}
-            {location.longitude.toFixed(5)}
-          </p>
-        </div>
       ) : null}
     </form>
   );

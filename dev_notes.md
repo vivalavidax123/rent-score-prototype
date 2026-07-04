@@ -41,8 +41,9 @@ Supporting pieces:
 * `app/lib/db.ts` — PrismaClient singleton guarded against dev hot-reload connection leaks.
 * `app/lib/services/searchStore.ts` — cache key builder, snapshot lookup/save, recent-search and saved-location listing, and save/unsave.
 * `/api/history` — returns recent searches ordered by `lastSearchedAt`.
-* `RecentSearches` component — chips under the search form; clicking one re-runs the search from stored coordinates without geocoding.
-* The UI shows a small "loaded from saved results" note when a response came from cache.
+* `RecentSearches` component — chips under the search form; clicking one re-runs the search from stored coordinates without geocoding. The recent row filters out locations that are already saved, so a location never appears as two chips at once.
+* Cache status is folded into the existing badge next to the "Category scores" heading ("Cached result" vs "Live nearby data", with a hover tooltip for the full explanation) instead of a standalone sentence in the layout.
+* The green geocode confirmation box under the search form was removed: the matched address is visible in the input and the chips, and coordinates are not user-relevant.
 
 ## Saved Locations
 

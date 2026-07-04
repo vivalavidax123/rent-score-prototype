@@ -59,7 +59,11 @@ export function RecentSearches({
   onSelect,
   onToggleSaved,
 }: RecentSearchesProps) {
-  if (recent.length === 0 && saved.length === 0) {
+  // Saved locations already appear in their own row; repeating them under
+  // "Recent" would show the same chip twice, so recent keeps unsaved only.
+  const unsavedRecent = recent.filter((search) => search.savedAt === null);
+
+  if (unsavedRecent.length === 0 && saved.length === 0) {
     return null;
   }
 
@@ -85,13 +89,13 @@ export function RecentSearches({
         </div>
       )}
 
-      {recent.length > 0 && (
+      {unsavedRecent.length > 0 && (
         <div>
           <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
             Recent searches
           </h2>
           <ul className="mt-2 flex flex-wrap gap-2">
-            {recent.map((search) => (
+            {unsavedRecent.map((search) => (
               <li key={search.id}>
                 <SearchChip
                   search={search}
