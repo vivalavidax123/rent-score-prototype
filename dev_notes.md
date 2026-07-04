@@ -71,6 +71,7 @@ Two saved locations can be compared side by side. Implementation:
 * `/api/compare?a=id1&b=id2` — GET with query params (a read-only endpoint, so the whole comparison is shareable as a URL). Both snapshot lookups run through `Promise.all` so total latency is the slower query, not the sum. Missing/equal ids answer 400, unknown ids 404.
 * `getComparisonSide` in `searchStore` returns a location plus its latest snapshot with the full `CategoryScore[]` parsed back out of `scoresJson` — the read-side twin of the `JSON.stringify` done at save time.
 * `ComparePanel` renders two controlled selects over the saved list and fetches automatically once both sides are chosen. The higher score per row is highlighted. It renders nothing until at least two locations are saved.
+* The panel lives in the right column between the map and additional indicators (it originally sat below the amenities list, which buried it several screens down and left the right column empty). Its selects stack vertically and its card styling matches the other right-column cards.
 
 ### Why these choices
 
@@ -163,7 +164,7 @@ The main page layout is split into a wider left column and narrower right column
 * Left column: search, compact overall score, compact category scores, and nearby amenities.
 * Right column: map preview and additional indicators.
 
-`NearbyPlacesList` is now part of the primary result area rather than a side panel. It summarizes total places found and the nearest amenity, then displays each category as a dense card with the closest visible place rows. This is intended to make the actual nearby services easier to inspect than the score math.
+`NearbyPlacesList` is now part of the primary result area rather than a side panel. It summarizes total places found and the nearest amenity, then displays each category as a dense card. Place rows are compact single lines (name, review summary, distance); the address and place type moved into a hover tooltip so low-priority detail stays available without costing rows. Each category shows three places by default with a "Show all N" toggle (progressive disclosure — expansion state is local per-category `useState`, since nothing else reads it). Bus-stop rows keep their route/departure sublines because that is core transport detail.
 
 `ScoreBreakdown` remains compact and uses category score, count, closest distance, and a short progress bar. Longer category explanations are deliberately omitted from the main UI for now so they do not compete with amenities.
 

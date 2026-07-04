@@ -117,8 +117,6 @@ export default function Home() {
             placesError={placesError}
             placeGroups={placeGroups}
           />
-
-          <ComparePanel saved={saved} />
         </div>
 
         <aside className="space-y-6">
@@ -131,6 +129,8 @@ export default function Home() {
                 : "Search for a location to show nearby amenities on the map."}
             </p>
           </div>
+
+          <ComparePanel saved={saved} />
 
           <AdditionalIndicators
             placesState={placesState}

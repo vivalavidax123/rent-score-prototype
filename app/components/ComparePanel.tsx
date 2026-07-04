@@ -131,14 +131,14 @@ export function ComparePanel({ saved }: ComparePanelProps) {
   }
 
   return (
-    <div className="mt-6 rounded-lg border border-slate-200 bg-slate-50 p-4">
-      <h2 className="text-lg font-bold text-slate-950">Compare saved locations</h2>
+    <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+      <h2 className="text-xl font-bold text-slate-950">Compare saved locations</h2>
       <p className="mt-1 text-xs text-slate-600">
         Pick two saved locations to see their category scores side by side.
         The higher score in each row is highlighted.
       </p>
 
-      <div className="mt-3 flex flex-col gap-3 sm:flex-row">
+      <div className="mt-3 flex flex-col gap-3">
         <LocationSelect
           label="Location A"
           value={effectiveAId}
