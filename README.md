@@ -71,22 +71,15 @@ The current UI uses a compact dashboard layout: overall and category scores are 
 
 ---
 
-# Proposed Scoring Logic
+# Scoring Logic
 
-Each category score is based on:
+Each category scores out of 100 from three pillars:
 
-* Number of nearby amenities
-* Distance to the closest amenities
-* Weighted importance of the category
+* **Proximity** — how close the nearest amenity is (walkable distances score highest, then a smooth decay)
+* **Variety** — how many options are nearby, with diminishing returns
+* **Quality** — how well the best nearby places are rated compared to what is typical for that kind of place
 
-Example factors:
-
-* More supermarkets nearby -> higher groceries score
-* Closer shopping centres within 10 km -> higher shopping centres score
-* Closer train stations → higher transport score
-* Fewer gyms nearby → lower fitness score
-
-The overall score is calculated using weighted averages across all categories.
+The overall score is a weighted average across all categories. The exact formulas, constants, and calibration notes live in `dev_notes.md`.
 
 ---
 
