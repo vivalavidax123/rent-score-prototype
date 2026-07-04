@@ -5,6 +5,10 @@ export type RentScoreCategory = {
   radiusMeters: number;
   colorClass: string;
   detail: string;
+  // Typical Google rating for this kind of place (banks trend ~2-3.5,
+  // gyms ~4.5-5). Quality scoring compares against this baseline so a
+  // category's review culture does not bias the score.
+  typicalRating: number;
   brandTerms: string[];
   placeTypes: string[];
 };
@@ -18,6 +22,7 @@ export const rentScoreCategories: RentScoreCategory[] = [
     weight: 12,
     radiusMeters: 10000,
     colorClass: "bg-teal-500",
+    typicalRating: 4.2,
     detail: "Major shopping centres and retail hubs within a broader area",
     brandTerms: ["Westfield", "Stockland", "DFO", "shopping centre", "shopping mall"],
     placeTypes: ["shopping_mall"],
@@ -27,6 +32,7 @@ export const rentScoreCategories: RentScoreCategory[] = [
     label: "Groceries",
     weight: 20,
     colorClass: "bg-emerald-500",
+    typicalRating: 4.2,
     radiusMeters: defaultSearchRadiusMeters,
     detail: "Supermarkets and everyday grocery options nearby",
     brandTerms: ["Woolworths", "Coles", "ALDI", "IGA", "Harris Farm"],
@@ -38,6 +44,7 @@ export const rentScoreCategories: RentScoreCategory[] = [
     weight: 15,
     radiusMeters: defaultSearchRadiusMeters,
     colorClass: "bg-amber-500",
+    typicalRating: 4.3,
     detail: "Cafes, restaurants, and casual food options nearby",
     brandTerms: [
       "McDonald's",
@@ -55,6 +62,7 @@ export const rentScoreCategories: RentScoreCategory[] = [
     weight: 20,
     radiusMeters: defaultSearchRadiusMeters,
     colorClass: "bg-sky-500",
+    typicalRating: 3.8,
     detail:
       "Bus stops within 1 km, or closest bus stops if none are found nearby, plus the nearest metro/train and V/Line stations",
     brandTerms: ["Sydney Trains", "Metro station", "light rail station"],
@@ -66,6 +74,7 @@ export const rentScoreCategories: RentScoreCategory[] = [
     weight: 15,
     radiusMeters: defaultSearchRadiusMeters,
     colorClass: "bg-rose-500",
+    typicalRating: 4.2,
     detail: "Pharmacies, clinics, and everyday health services nearby",
     brandTerms: [
       "Chemist Warehouse",
@@ -81,6 +90,7 @@ export const rentScoreCategories: RentScoreCategory[] = [
     weight: 10,
     radiusMeters: defaultSearchRadiusMeters,
     colorClass: "bg-violet-500",
+    typicalRating: 4.7,
     detail: "Gyms and fitness facilities in the surrounding area",
     brandTerms: [
       "Anytime Fitness",
@@ -97,6 +107,7 @@ export const rentScoreCategories: RentScoreCategory[] = [
     weight: 10,
     radiusMeters: defaultSearchRadiusMeters,
     colorClass: "bg-orange-500",
+    typicalRating: 4.0,
     detail: "Fuel stations and major automotive parts stores nearby",
     brandTerms: ["Ampol", "BP", "Shell", "7-Eleven", "Repco", "Supercheap Auto", "Autobarn", "Burson Auto Parts"],
     placeTypes: ["gas_station"],
@@ -107,6 +118,7 @@ export const rentScoreCategories: RentScoreCategory[] = [
     weight: 10,
     radiusMeters: defaultSearchRadiusMeters,
     colorClass: "bg-indigo-500",
+    typicalRating: 3.3,
     detail: "Banks, post offices, and practical services nearby",
     brandTerms: ["Australia Post", "Commonwealth Bank", "ANZ", "NAB", "Westpac"],
     placeTypes: ["post_office", "bank"],

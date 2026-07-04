@@ -132,14 +132,21 @@ To guarantee high-quality results, the API applies strict filtering:
 * **Review Thresholds:** Any non-transport place returned from Google Places with fewer than 30 reviews is globally excluded from scoring and the UI.
 * **Narrow Categories:** The Fuel & Automotive category strictly searches for `gas_station` and specific auto parts brands, intentionally filtering out minor local mechanics (`car_repair`). The Services category strictly searches for `post_office` and `bank`, dropping standalone ATMs.
 
-## Scoring V2
+## Scoring V3
 
-The scoring algorithm assigns each category a score out of 100, which is split across three pillars:
-1. **Proximity Score (Max 50 points):** Uses a stepped decay based on typical Australian travel norms. Walkable distances (<500m) score a perfect 50, short drives (<2000m) score 40, and longer normal drives linearly scale down to a baseline of 15 points (accommodating Australian driving norms where having a car is common).
-2. **Variety Score (Max 30 points):** Rewards the quantity of amenities found, but caps differently based on the category type. High-variety categories (Food & Cafes, Fitness) require 5+ places to maximize points, whereas low-variety categories (Groceries, Transport, Services, Shopping) hit max points with just 2 places.
-3. **Quality Score (Max 20 points):** Evaluates the average user rating of the top 3 best-rated businesses in that category. An average of 4.5+ awards 20 points, 4.0+ awards 15 points, and below 4.0 awards 5 points. Locations without ratings (like Transit stops) default to full points to avoid penalization.
+Each category scores out of 100 across three pillars. V3 replaced V2's stepped tiers with continuous curves after real snapshots showed V2 compressing every location into 68–100 (a CBD and a new estate differed by only 9 overall points).
 
-Overall score remains a weighted average of these individual category scores. Future scoring can add better walking-distance estimates, public transport frequency, school data, safety signals, and rental price context.
+1. **Proximity (max 50):** full points within 400 m (genuinely walkable), then exponential decay with a half-life of 0.4 × the category search radius (1,200 m for standard 3 km categories, 4,000 m for 10 km shopping centres). No cliffs: 1,719 m and 1,721 m score essentially the same.
+2. **Variety (max 30):** `30 × (1 − e^(−count/k))` with k = 6 for high-variety categories (Food & Cafes, Fitness) and k = 3 otherwise. Diminishing returns instead of a hard cap — the 10th cafe still adds something, so 25 cafes now outscore 12.
+3. **Quality (max 20):** average rating of the top 3 rated places compared against the category's `typicalRating` baseline in `categories.ts` (banks ~3.3, stations ~3.8, gyms ~4.7): `10 + 12.5 × (avg − typical)`, clamped to 0–20. This cancels per-category review culture — a 4.1-rated bank is excellent for a bank, a 4.5 gym is ordinary. Places without ratings get the neutral midpoint 10, not free full marks.
+
+Overall score remains a weighted average of category scores.
+
+Calibration was done by simulating the formulas against stored snapshots before implementation: Melbourne CBD 95→92, Hoppers Crossing 91→88, Williams Landing 86→72, widening the spread from 9 to 20 points and surfacing the new estate's real weaknesses (groceries/health at ~1.7 km, low-rated services). All constants (400 m ring, 0.4 half-life factor, k values, 12.5 slope, typical ratings) are first-pass values kept in one place for easy retuning; `typicalRating` is currently judgement-based and could later be derived from accumulated snapshot data.
+
+Because scores live in cached snapshots, the `ScoreSnapshot` table was cleared when V3 shipped — mixing V2 and V3 numbers in history or comparisons would be misleading. Saved locations were unaffected and re-scored on next search.
+
+Future scoring can add better walking-distance estimates, public transport frequency, school data, safety signals, and rental price context.
 
 ## Provider Choice
 

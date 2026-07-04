@@ -1,6 +1,18 @@
 import { rentScoreCategories } from "./categories";
 import type { PlaceGroup, NearbyPlace } from "./types";
 
+// V3 scoring: every pillar is a continuous curve so that no 1-metre or
+// 0.01-rating difference can ever jump the score by a whole tier. The
+// constants here are first-pass calibration values, tuned against real
+// snapshots of a CBD, an established suburb, and a new estate.
+
+// Within this distance a place counts as genuinely walkable: full points.
+const walkableRadiusMeters = 400;
+
+// Categories where more choice keeps mattering (cafes, gyms) saturate
+// slower than categories where two options are already plenty.
+const highVarietyCategories = ["food", "fitness"];
+
 function getProximityScore(
   closestDistanceMeters: number | null,
   radiusMeters: number,
@@ -9,60 +21,53 @@ function getProximityScore(
     return 0;
   }
 
-  if (closestDistanceMeters <= 500) {
-    return 50; // Walkable
+  if (closestDistanceMeters <= walkableRadiusMeters) {
+    return 50;
   }
 
-  if (closestDistanceMeters <= 2000) {
-    return 40; // Short drive
-  }
+  // Exponential decay: the score halves every halfLifeMeters past the
+  // walkable ring. Wider-radius categories (shopping centres) decay slower.
+  const halfLifeMeters = 0.4 * radiusMeters;
+  const metersPastWalkable = closestDistanceMeters - walkableRadiusMeters;
 
-  // Normal drive in Australia (scales from 35 down to 15, never hits 0 just for driving)
-  const distancePast2k = closestDistanceMeters - 2000;
-  const drivableRange = Math.max(1, radiusMeters - 2000);
-  const ratio = Math.min(1, distancePast2k / drivableRange);
-  
-  return Math.round(35 - 20 * ratio);
+  return 50 * 2 ** (-metersPastWalkable / halfLifeMeters);
 }
 
 function getVarietyScore(count: number, categoryId: string) {
-  if (count === 0) return 0;
-
-  const highVarietyCategories = ["food", "fitness"];
-  const isHighVariety = highVarietyCategories.includes(categoryId);
-
-  if (isHighVariety) {
-    // Max 30 points at 5 places (6 points per place)
-    return Math.min(30, count * 6);
-  } else {
-    // Max 30 points at 2 places (15 points per place)
-    return Math.min(30, count * 15);
+  if (count === 0) {
+    return 0;
   }
+
+  // Diminishing returns: every extra place still adds something, but the
+  // 10th adds far less than the 2nd. Never fully saturates.
+  const saturationCount = highVarietyCategories.includes(categoryId) ? 6 : 3;
+
+  return 30 * (1 - Math.exp(-count / saturationCount));
 }
 
-function getQualityScore(places: NearbyPlace[]) {
-  if (places.length === 0) return 0;
-
-  // Filter places with valid ratings
-  const placesWithRatings = places.filter(
-    (p) => typeof p.rating === "number" && p.rating !== null,
-  );
-
-  // If no places have ratings (e.g., bus stops), default to full quality points
-  if (placesWithRatings.length === 0) {
-    return 20;
+function getQualityScore(places: NearbyPlace[], typicalRating: number) {
+  if (places.length === 0) {
+    return 0;
   }
 
-  // Calculate average rating of top 3 places
-  const topPlaces = placesWithRatings
-    .sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0))
+  const topRatings = places
+    .map((place) => place.rating)
+    .filter((rating): rating is number => typeof rating === "number")
+    .sort((a, b) => b - a)
     .slice(0, 3);
-  const avgRating =
-    topPlaces.reduce((sum, p) => sum + (p.rating ?? 0), 0) / topPlaces.length;
 
-  if (avgRating >= 4.5) return 20;
-  if (avgRating >= 4.0) return 15;
-  return 5;
+  // No rating data (e.g. bus stops): neutral midpoint, not free full marks.
+  if (topRatings.length === 0) {
+    return 10;
+  }
+
+  const avgRating =
+    topRatings.reduce((sum, rating) => sum + rating, 0) / topRatings.length;
+
+  // Compare against what is normal for this kind of place (banks trend low,
+  // gyms trend high), so review culture cancels out: 0.8 above the category
+  // baseline reaches 20, 0.8 below reaches 0.
+  return Math.max(0, Math.min(20, 10 + 12.5 * (avgRating - typicalRating)));
 }
 
 function getExplanation(count: number, closestDistanceMeters: number | null) {
@@ -92,9 +97,13 @@ export function scorePlaceGroups(groups: PlaceGroup[]) {
       category.radiusMeters,
     );
     const varietyScore = getVarietyScore(places.length, category.id);
-    const qualityScore = getQualityScore(places);
+    const qualityScore = getQualityScore(places, category.typicalRating);
 
-    const score = Math.min(100, proximityScore + varietyScore + qualityScore);
+    // Pillars are fractional now, so round once at the end.
+    const score = Math.min(
+      100,
+      Math.round(proximityScore + varietyScore + qualityScore),
+    );
 
     return {
       id: category.id,
