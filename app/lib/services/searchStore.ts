@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/app/lib/db";
 import type { CategoryScore, PlaceGroup, RecentSearch } from "@/app/lib/types";
 
@@ -93,6 +94,34 @@ export async function saveSnapshot({
   });
 }
 
+type LocationWithLatestSnapshot = {
+  id: string;
+  query: string;
+  formattedAddress: string;
+  placeId: string;
+  locationType: string;
+  latitude: number;
+  longitude: number;
+  lastSearchedAt: Date;
+  savedAt: Date | null;
+  snapshots: { overallScore: number }[];
+};
+
+function toRecentSearch(location: LocationWithLatestSnapshot): RecentSearch {
+  return {
+    id: location.id,
+    query: location.query,
+    formattedAddress: location.formattedAddress,
+    placeId: location.placeId,
+    locationType: location.locationType,
+    latitude: location.latitude,
+    longitude: location.longitude,
+    lastSearchedAt: location.lastSearchedAt.toISOString(),
+    savedAt: location.savedAt?.toISOString() ?? null,
+    overallScore: location.snapshots[0].overallScore,
+  };
+}
+
 export async function listRecentSearches(limit = 8): Promise<RecentSearch[]> {
   const locations = await prisma.searchLocation.findMany({
     orderBy: { lastSearchedAt: "desc" },
@@ -102,15 +131,38 @@ export async function listRecentSearches(limit = 8): Promise<RecentSearch[]> {
 
   return locations
     .filter((location) => location.snapshots.length > 0)
-    .map((location) => ({
-      id: location.id,
-      query: location.query,
-      formattedAddress: location.formattedAddress,
-      placeId: location.placeId,
-      locationType: location.locationType,
-      latitude: location.latitude,
-      longitude: location.longitude,
-      lastSearchedAt: location.lastSearchedAt.toISOString(),
-      overallScore: location.snapshots[0].overallScore,
-    }));
+    .map(toRecentSearch);
+}
+
+export async function listSavedLocations(): Promise<RecentSearch[]> {
+  const locations = await prisma.searchLocation.findMany({
+    where: { savedAt: { not: null } },
+    orderBy: { savedAt: "desc" },
+    include: { snapshots: { orderBy: { createdAt: "desc" }, take: 1 } },
+  });
+
+  return locations
+    .filter((location) => location.snapshots.length > 0)
+    .map(toRecentSearch);
+}
+
+// Saving writes the current time; unsaving writes null. Returns false when
+// the location id does not exist so the API can answer 404 instead of 500.
+export async function setLocationSaved(id: string, saved: boolean) {
+  try {
+    await prisma.searchLocation.update({
+      where: { id },
+      data: { savedAt: saved ? new Date() : null },
+    });
+    return true;
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2025"
+    ) {
+      return false;
+    }
+
+    throw error;
+  }
 }

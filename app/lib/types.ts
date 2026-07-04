@@ -98,6 +98,7 @@ export type RecentSearch = {
   latitude: number;
   longitude: number;
   lastSearchedAt: string;
+  savedAt: string | null;
   overallScore: number;
 };
 

@@ -39,14 +39,24 @@ Flow in `/api/places`: look up the newest snapshot for the cache key; if it is y
 Supporting pieces:
 
 * `app/lib/db.ts` — PrismaClient singleton guarded against dev hot-reload connection leaks.
-* `app/lib/services/searchStore.ts` — cache key builder, snapshot lookup/save, and recent-search listing.
+* `app/lib/services/searchStore.ts` — cache key builder, snapshot lookup/save, recent-search and saved-location listing, and save/unsave.
 * `/api/history` — returns recent searches ordered by `lastSearchedAt`.
 * `RecentSearches` component — chips under the search form; clicking one re-runs the search from stored coordinates without geocoding.
 * The UI shows a small "loaded from saved results" note when a response came from cache.
 
+## Saved Locations
+
+Users can star any recent search to keep it permanently. Implementation:
+
+* `SearchLocation.savedAt DateTime?` — null means not saved; a timestamp doubles as the save date and the sort key for the saved list. Same pattern as soft-delete `deletedAt` columns.
+* `/api/favourites` — REST verbs on one route: GET lists saved locations, POST (`{ locationId }`) saves, DELETE (`?id=`) unsaves. Input is validated at the route boundary: missing/invalid ids answer 400, unknown ids answer 404 (Prisma error `P2025` is caught in `setLocationSaved` and mapped to `false`).
+* `RecentSearches` renders both a "Saved locations" and a "Recent searches" chip row. Each chip is a div with two sibling buttons (address re-runs the search, star toggles saving) because HTML forbids nesting buttons. After a toggle the component refetches both lists instead of hand-editing local state, keeping the database the single source of truth.
+
+This completes CRUD coverage over the persistence layer (create/read via search caching, update via save toggling; snapshot deletion is still only via cascade).
+
 `DATABASE_URL` lives in `.env` (Prisma CLI reads `.env`, not `.env.local`). An older unfinished persistence attempt had left a PostgreSQL `DATABASE_URL` in `.env.local` and an empty migration folder; both were cleaned up because `.env.local` overrides `.env` in Next.js and was breaking the SQLite connection.
 
-Recommended next full-stack milestone: saved/favourite locations and side-by-side comparison built on the existing tables, or authentication if multi-user support becomes a goal.
+Recommended next full-stack milestone: side-by-side comparison of two saved locations, or authentication if multi-user support becomes a goal.
 
 ## Category Configuration
 

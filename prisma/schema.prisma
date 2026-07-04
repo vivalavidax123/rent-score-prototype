@@ -20,6 +20,8 @@ model SearchLocation {
   longitude        Float
   createdAt        DateTime        @default(now())
   lastSearchedAt   DateTime        @default(now())
+  // Null means not saved; a timestamp doubles as the save date for sorting.
+  savedAt          DateTime?
   snapshots        ScoreSnapshot[]
 }
 

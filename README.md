@@ -125,6 +125,7 @@ Persistence now included:
 * Searched locations and score snapshots stored on every search
 * Repeat searches of the same location within 24 hours are served from the database instead of calling Google again
 * Recent searches shown in the UI and re-runnable with one click
+* Locations can be starred as saved favourites and managed from the UI
 
 It is not yet a production full-stack platform. The main missing pieces are:
 
@@ -142,6 +143,7 @@ rent-score-prototype/
 ├── app/
 │   ├── api/
 │   │   ├── autocomplete/
+│   │   ├── favourites/
 │   │   ├── geocode/
 │   │   ├── history/
 │   │   └── places/
