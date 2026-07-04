@@ -6,6 +6,8 @@ The system allows users to search for an address, suburb, street, or approximate
 
 This project is intended as a functional prototype rather than a production-ready platform.
 
+**Live demo:** https://rent-score-prototype.vercel.app/
+
 ---
 
 # Project Goals

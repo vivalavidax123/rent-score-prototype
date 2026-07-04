@@ -31,6 +31,8 @@ Database persistence was added with Prisma 6, initially on SQLite and later swit
 
 Deployment pipeline: `postinstall` runs `prisma generate` (Vercel builds start from a clean machine) and the build script runs `prisma migrate deploy` before `next build`, so schema changes pushed to GitHub are applied to the production database automatically on deploy.
 
+The app is deployed at https://rent-score-prototype.vercel.app/ (Vercel, auto-deploys on push to main). Environment variables are configured in the Vercel dashboard — paste bare values there, no quotes (a quoted `DATABASE_URL` failed the first deploy with P1012). The browser Maps key is referrer-restricted to localhost and the vercel.app domains and API-restricted to Maps JavaScript API; the server key has no referrer restriction (server calls send none) and is API-restricted to Places API (New) and Geocoding API. Local dev and production currently share the one Neon database.
+
 Two tables in `prisma/schema.prisma`:
 
 * **SearchLocation:** one row per searched location. `cacheKey` is the lat/lng rounded to 4 decimal places (~11 m), so repeat searches of the same spot reuse the row even if geocoding jitters.
