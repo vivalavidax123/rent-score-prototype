@@ -146,6 +146,30 @@ export async function listSavedLocations(): Promise<RecentSearch[]> {
     .map(toRecentSearch);
 }
 
+// Full category scores for one location, for the comparison view. Returns
+// null when the id is unknown or the location has no snapshot yet.
+export async function getComparisonSide(id: string) {
+  const location = await prisma.searchLocation.findUnique({
+    where: { id },
+    include: { snapshots: { orderBy: { createdAt: "desc" }, take: 1 } },
+  });
+
+  const snapshot = location?.snapshots[0];
+
+  if (!location || !snapshot) {
+    return null;
+  }
+
+  return {
+    id: location.id,
+    query: location.query,
+    formattedAddress: location.formattedAddress,
+    overallScore: snapshot.overallScore,
+    scores: JSON.parse(snapshot.scoresJson) as CategoryScore[],
+    fetchedAt: snapshot.createdAt.toISOString(),
+  };
+}
+
 // Saving writes the current time; unsaving writes null. Returns false when
 // the location id does not exist so the API can answer 404 instead of 500.
 export async function setLocationSaved(id: string, saved: boolean) {

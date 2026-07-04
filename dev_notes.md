@@ -64,7 +64,21 @@ This completes CRUD coverage over the persistence layer (create/read via search 
 
 `DATABASE_URL` lives in `.env` (Prisma CLI reads `.env`, not `.env.local`). An older unfinished persistence attempt had left a PostgreSQL `DATABASE_URL` in `.env.local` and an empty migration folder; both were cleaned up because `.env.local` overrides `.env` in Next.js and was breaking the SQLite connection.
 
-Recommended next full-stack milestone: side-by-side comparison of two saved locations, or authentication if multi-user support becomes a goal.
+## Comparison View
+
+Two saved locations can be compared side by side. Implementation:
+
+* `/api/compare?a=id1&b=id2` — GET with query params (a read-only endpoint, so the whole comparison is shareable as a URL). Both snapshot lookups run through `Promise.all` so total latency is the slower query, not the sum. Missing/equal ids answer 400, unknown ids 404.
+* `getComparisonSide` in `searchStore` returns a location plus its latest snapshot with the full `CategoryScore[]` parsed back out of `scoresJson` — the read-side twin of the `JSON.stringify` done at save time.
+* `ComparePanel` renders two controlled selects over the saved list and fetches automatically once both sides are chosen. The higher score per row is highlighted. It renders nothing until at least two locations are saved.
+
+### Why these choices
+
+* **State lifted into `useSavedSearches`.** The chips and the comparison panel both need the saved list; if each fetched its own copy they would drift apart after a star toggle. The hook owns one copy in `page.tsx` and both components receive it as props — `RecentSearches` became purely presentational in the process.
+* **No new database columns or Google calls.** Comparison is a pure read over existing snapshots — the payoff of persisting results in week one.
+* **Stale-selection guard.** If a location is unstarred while selected in a dropdown, an effect clears that selection so the UI and the saved list never disagree.
+
+Recommended next full-stack milestone: deploy to Vercel with a hosted Postgres (swap the Prisma datasource provider), since the core loop — search, score, save, compare — is now complete. Authentication remains the follow-up after that if multi-user support becomes a goal.
 
 ## Category Configuration
 

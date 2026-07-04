@@ -32,6 +32,7 @@ The purpose of this prototype is to:
 * Show nearby places on an interactive map
 * Highlight nearby amenities as the primary result detail
 * Provide compact explanations for score calculations
+* Save favourite locations and compare two of them side by side
 * Show additional derived indicators such as walkability, transit access, amenity density, daily convenience, and car reliance
 
 ---

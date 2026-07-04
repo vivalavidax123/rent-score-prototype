@@ -112,6 +112,26 @@ export type HistoryFailure = {
   error: string;
 };
 
+export type ComparisonSide = {
+  id: string;
+  query: string;
+  formattedAddress: string;
+  overallScore: number;
+  scores: CategoryScore[];
+  fetchedAt: string;
+};
+
+export type CompareSuccess = {
+  ok: true;
+  a: ComparisonSide;
+  b: ComparisonSide;
+};
+
+export type CompareFailure = {
+  ok: false;
+  error: string;
+};
+
 export type PlacesFailure = {
   ok: false;
   error: string;

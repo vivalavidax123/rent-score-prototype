@@ -1,6 +1,8 @@
 "use client";
 
 import { useLocationSearch } from "./hooks/useLocationSearch";
+import { useSavedSearches } from "./hooks/useSavedSearches";
+import { ComparePanel } from "./components/ComparePanel";
 import { LocationMap } from "./components/LocationMap";
 import { SearchForm } from "./components/SearchForm";
 import { ScoreBreakdown } from "./components/ScoreBreakdown";
@@ -33,6 +35,9 @@ export default function Home() {
     handleLocationKeyDown,
     searchFromHistory,
   } = useLocationSearch();
+
+  // Shared by the chips and the comparison panel — one copy of the lists.
+  const { recent, saved, toggleSaved } = useSavedSearches(placesState);
 
   return (
     <main className="min-h-screen bg-[#f3f6f4] px-4 py-5 text-slate-950 sm:px-6 lg:px-8">
@@ -86,7 +91,13 @@ export default function Home() {
             handleLocationKeyDown={handleLocationKeyDown}
           />
 
-          <RecentSearches placesState={placesState} onSelect={searchFromHistory} />
+          <RecentSearches
+            recent={recent}
+            saved={saved}
+            disabled={placesState === "loading"}
+            onSelect={searchFromHistory}
+            onToggleSaved={toggleSaved}
+          />
 
           {placesState === "success" && resultFromCache && (
             <p className="mt-3 text-xs text-slate-500">
@@ -106,6 +117,8 @@ export default function Home() {
             placesError={placesError}
             placeGroups={placeGroups}
           />
+
+          <ComparePanel saved={saved} />
         </div>
 
         <aside className="space-y-6">
