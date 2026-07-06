@@ -117,7 +117,10 @@ function toRecentSearch(location: LocationWithLatestSnapshot): RecentSearch {
     longitude: location.longitude,
     lastSearchedAt: location.lastSearchedAt.toISOString(),
     savedAt: location.savedAt?.toISOString() ?? null,
-    overallScore: location.snapshots[0].overallScore,
+    // A location can exist without a snapshot (snapshots are cleared when
+    // the scoring algorithm changes). It must still be listed — a saved
+    // place should never disappear because of cache state.
+    overallScore: location.snapshots[0]?.overallScore ?? null,
   };
 }
 
@@ -128,9 +131,7 @@ export async function listRecentSearches(limit = 8): Promise<RecentSearch[]> {
     include: { snapshots: { orderBy: { createdAt: "desc" }, take: 1 } },
   });
 
-  return locations
-    .filter((location) => location.snapshots.length > 0)
-    .map(toRecentSearch);
+  return locations.map(toRecentSearch);
 }
 
 export async function listSavedLocations(): Promise<RecentSearch[]> {
@@ -140,9 +141,7 @@ export async function listSavedLocations(): Promise<RecentSearch[]> {
     include: { snapshots: { orderBy: { createdAt: "desc" }, take: 1 } },
   });
 
-  return locations
-    .filter((location) => location.snapshots.length > 0)
-    .map(toRecentSearch);
+  return locations.map(toRecentSearch);
 }
 
 // Full category scores for one location, for the comparison view. Returns

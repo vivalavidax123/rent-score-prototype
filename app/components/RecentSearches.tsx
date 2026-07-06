@@ -33,9 +33,11 @@ function SearchChip({ search, disabled, onSelect, onToggleSaved }: SearchChipPro
         className="flex items-center gap-2 rounded-l-full py-1.5 pl-3 pr-1 hover:bg-emerald-50 disabled:opacity-50"
       >
         <span className="max-w-52 truncate">{search.formattedAddress}</span>
-        <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 font-semibold text-emerald-800">
-          {Math.round(search.overallScore)}
-        </span>
+        {search.overallScore !== null ? (
+          <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 font-semibold text-emerald-800">
+            {Math.round(search.overallScore)}
+          </span>
+        ) : null}
       </button>
       <button
         type="button"

@@ -59,6 +59,8 @@ Users can star any recent search to keep it permanently. Implementation:
 
 This completes CRUD coverage over the persistence layer (create/read via search caching, update via save toggling; snapshot deletion is still only via cascade).
 
+Saved locations are independent of snapshot state: listings no longer require a snapshot to exist, so clearing `ScoreSnapshot` (done on scoring-algorithm changes) never makes favourites vanish — they show without a score badge until re-searched, and the compare panel offers only the ones that have scores. Stars (`savedAt`) are never deleted by any time-based process; the 24-hour TTL only decides when Google is re-queried.
+
 ### Why these choices
 
 * **Nullable timestamp instead of a boolean `isSaved`.** One column carries two facts — whether it is saved and when — so the saved list can sort by save date without another column and another migration. Timestamps-as-state is a widely used pattern (`deletedAt`, `verifiedAt`, `publishedAt`).

@@ -99,7 +99,9 @@ export type RecentSearch = {
   longitude: number;
   lastSearchedAt: string;
   savedAt: string | null;
-  overallScore: number;
+  // Null when the location has no score snapshot (e.g. snapshots were
+  // cleared after a scoring change); the location itself still exists.
+  overallScore: number | null;
 };
 
 export type HistorySuccess = {

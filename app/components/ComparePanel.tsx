@@ -61,7 +61,11 @@ function scoreCell(score: number, otherScore: number) {
   );
 }
 
-export function ComparePanel({ saved }: ComparePanelProps) {
+export function ComparePanel({ saved: allSaved }: ComparePanelProps) {
+  // Comparison needs stored scores, so only offer locations that have a
+  // snapshot; scoreless favourites reappear here after being re-searched.
+  const saved = allSaved.filter((search) => search.overallScore !== null);
+
   const [aId, setAId] = useState("");
   const [bId, setBId] = useState("");
   const [result, setResult] = useState<{ a: ComparisonSide; b: ComparisonSide } | null>(null);
