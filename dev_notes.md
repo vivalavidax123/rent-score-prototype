@@ -123,6 +123,20 @@ Fix: after successful email sign-in/up, navigate with `window.location.assign("/
 
 Deployment checklist (not yet done): paste the real `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` into local `.env` (placeholders sit there now; email/password works without them), then add `BETTER_AUTH_SECRET` (a fresh one, not the dev value), `BETTER_AUTH_URL=https://rent-score-prototype.vercel.app`, and the Google pair to Vercel. Both redirect URIs (localhost and vercel.app) are already registered in the Google console.
 
+## Naming and Unit Tests
+
+The app is branded "Your Renting Helper" (layout metadata + the page H1; the tab previously still said "Create Next App" from the template). The repo/deployment name stays `rent-score-prototype`.
+
+First unit tests landed with Vitest (`npm test` / `npm run test:watch`), chosen over Jest because it runs TypeScript with zero config. Coverage starts where it pays most: the pure functions in `scoring.ts` and `utils.ts` — 18 tests, no database or network, sub-second run.
+
+### Testing principles the suite demonstrates
+
+* **Test through the public API.** The scoring pillars are private; every test calls `scorePlaceGroups`. Tests pinned to internals break on refactors, tests pinned to behaviour only break when behaviour changes.
+* **Property tests over exact numbers.** The curve constants are explicitly "first-pass values kept in one place for easy retuning" — asserting `score(700) === 43` would break on every retune. Instead the tests assert shape: monotonic decay, walkable-ring equality, carOwner ≥ carFree at distance, rated-above-baseline > unrated > rated-below.
+* **Invariant tests.** The overall score is recomputed from the returned parts inside the test and required to match, so the aggregation formula cannot silently drift; weights must sum to 100.
+* **Oracle tests.** `getDistanceMeters` is checked against an independently known value (one degree of latitude ≈ 111.2 km) instead of re-deriving haversine in the test.
+* **Edge cases that lie silently.** `Number("") === 0` would turn an empty query param into coordinates in the Gulf of Guinea; GTFS `25:10` means 1:10 am next service day and must not be "fixed". The locale-dependent `toLocaleTimeString` branch is deliberately untested so the suite passes on any machine.
+
 ## Category Configuration
 
 Category metadata lives in `app/lib/categories.ts` instead of inside the Places API route. This keeps one source of truth for:
