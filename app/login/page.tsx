@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { authClient } from "@/app/lib/auth-client";
 
 type Mode = "signIn" | "signUp";
@@ -10,7 +9,6 @@ type Mode = "signIn" | "signUp";
 // One page for both sign in and sign up: the two forms share every field
 // except name, so a mode toggle beats two near-identical pages.
 export default function LoginPage() {
-  const router = useRouter();
   const [mode, setMode] = useState<Mode>("signIn");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -35,7 +33,12 @@ export default function LoginPage() {
       return;
     }
 
-    router.push("/");
+    // Full-page navigation, not router.push: client-side nav keeps the old
+    // in-memory useSession value (null from before login) alive, which
+    // rendered the home page as signed out until a second sign-in. A hard
+    // load refetches the session from scratch — same reason the Google
+    // redirect flow never had this bug.
+    window.location.assign("/");
   };
 
   // Google is a full-page redirect: the browser leaves for Google's consent

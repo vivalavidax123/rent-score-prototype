@@ -111,6 +111,14 @@ UI: `AuthStatus` in the page header shows a sign-in link or email + sign-out; st
 
 Migration note: `prisma migrate dev` refuses non-interactive shells, so the migration was generated with `prisma migrate diff --from-schema-datasource --to-schema-datamodel --script` into a hand-named migration folder and applied with `prisma migrate deploy` — the same command the Vercel build runs.
 
+### Stale-session bug after email login
+
+Symptom: after signing out and signing back in with email/password, the first landing on the home page looked signed out (no email in the header, no star buttons) while the saved/recent lists still loaded — data that requires a valid session. A second sign-in "fixed" it.
+
+Cause: the login page navigated with `router.push("/")` — a client-side navigation that keeps all in-memory JS state alive. `useSession`'s cached value had been set to null at sign-out, and the refresh it should get after sign-in raced the navigation, so the home page rendered against the stale null. The server saw the (valid) session cookie on every API call, hence the split-brain: server-fetched lists present, client-side session absent. Google login never had the bug because OAuth is a full-page redirect — everything reloads from scratch on return.
+
+Fix: after successful email sign-in/up, navigate with `window.location.assign("/")` instead of `router.push`. A hard load refetches the session from zero, so no stale cache can survive — deliberately matching the redirect behaviour of the Google flow. Rule of thumb: after a whole-session state change (login, logout), prefer a full page load over SPA navigation; the lost smoothness is trivial next to a whole class of stale-state bugs.
+
 Deployment checklist (not yet done): paste the real `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` into local `.env` (placeholders sit there now; email/password works without them), then add `BETTER_AUTH_SECRET` (a fresh one, not the dev value), `BETTER_AUTH_URL=https://rent-score-prototype.vercel.app`, and the Google pair to Vercel. Both redirect URIs (localhost and vercel.app) are already registered in the Google console.
 
 ## Category Configuration
