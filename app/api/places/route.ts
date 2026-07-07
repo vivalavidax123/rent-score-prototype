@@ -12,9 +12,11 @@ import path from "node:path";
 import { parseCoordinate, normalizeStationName, normalizeText } from "@/app/lib/utils";
 import { fetchPlacesForBrand, fetchPlacesForTypes } from "@/app/lib/services/googlePlaces";
 import { fetchTransitlandBusStops } from "@/app/lib/services/transitland";
+import { auth } from "@/app/lib/auth";
 import {
   buildCacheKey,
   findFreshSnapshot,
+  recordUserSearch,
   saveSnapshot,
 } from "@/app/lib/services/searchStore";
 import type { GooglePlace, NearbyPlace, PlaceSource } from "@/app/lib/types";
@@ -463,6 +465,23 @@ export async function GET(request: Request) {
 
   const cacheKey = buildCacheKey(latitude, longitude);
 
+  // Search history is per-account; a failed session read just means the
+  // search is treated as anonymous and not recorded.
+  const session = await auth.api
+    .getSession({ headers: request.headers })
+    .catch(() => null);
+  const userId = session?.user.id ?? null;
+
+  // History writes must never break the search itself — same degradation
+  // philosophy as the snapshot cache below.
+  const recordSearch = async () => {
+    if (userId) {
+      await recordUserSearch(userId, cacheKey).catch((error) => {
+        console.error("Recording search history failed:", error);
+      });
+    }
+  };
+
   // A database problem should degrade to a normal Google lookup, not break
   // the search, so cache reads and writes never throw past this point.
   try {
@@ -474,6 +493,8 @@ export async function GET(request: Request) {
         cachedResult.groups,
         profile,
       );
+
+      await recordSearch();
 
       return Response.json({
         ok: true,
@@ -530,6 +551,9 @@ export async function GET(request: Request) {
     } catch (error) {
       console.error("Saving search result failed:", error);
     }
+
+    // After saveSnapshot so the location row exists to attach history to.
+    await recordSearch();
 
     return Response.json({
       ok: true,

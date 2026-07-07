@@ -101,7 +101,9 @@ Pieces:
 * `/login` — one page toggling between sign-in and sign-up (they share every field but name), plus "Continue with Google" which is a full-page redirect out and back.
 * The CLI (`npx @better-auth/cli generate`) wrote four models into `schema.prisma`: `user`, `session`, `account` (one row per linked login method — a user can hold both a password and a Google account), `verification`.
 
-Favourites became per-user via a `UserSavedLocation` join table (`userId`, `locationId`, `savedAt`, composite primary key). The old global `SearchLocation.savedAt` column was dropped — locations and snapshots stay a shared cache because a location's score does not depend on who asks; only the star is per-viewer. Recent searches remain global for now (`listRecentSearches` takes the viewer's id purely to mark which chips are starred; signed-out visitors match no rows). **Existing stars could not be migrated** — they had no owning user — so dev-branch stars were dropped with the column, and production will lose its stars the same way when this deploys.
+Favourites became per-user via a `UserSavedLocation` join table (`userId`, `locationId`, `savedAt`, composite primary key). The old global `SearchLocation.savedAt` column was dropped — locations and snapshots stay a shared cache because a location's score does not depend on who asks; only the star is per-viewer. **Existing stars could not be migrated** — they had no owning user — so dev-branch stars were dropped with the column, and production will lose its stars the same way when this deploys.
+
+Recent searches are per-account too, via a `UserSearch` join table (`userId`, `locationId`, `lastSearchedAt`, upserted so re-searching bumps instead of duplicating). Recents were briefly global after auth landed, which meant a fresh account saw strangers' searches — a privacy leak and confusing UX. Now `/api/places` records a `UserSearch` row for signed-in searchers (after `saveSnapshot`, so the location row exists; wrapped so a history-write failure never breaks the search), `listRecentSearches` reads only the viewer's rows, and signed-out visitors get an empty list. The chip shows when *this user* last searched a spot, not when anyone did. The shared `SearchLocation` cache is unchanged — an anonymous search still warms the snapshot cache for everyone; it just isn't attributed to anyone.
 
 API boundary: all `/api/favourites` verbs resolve the session cookie first and answer **401** without one — a fourth error code alongside 400/404/500, meaning "we don't know who you are". `/api/history` stays public. `setLocationSaved` maps `P2003` (unknown location on save) and `P2025` (missing row on unsave) to 404; saving twice is an idempotent upsert.
 
@@ -259,7 +261,7 @@ Planned indicators are shown as placeholders and must not be treated as live dat
 
 ## Deferred Work
 
-AI summaries, crime data, school quality, and rental price analysis are deferred. Map/list interactions, such as clicking a list item to focus the matching marker, are also deferred. On the auth side: per-user recent searches, email verification, password reset, and account settings are deferred.
+AI summaries, crime data, school quality, and rental price analysis are deferred. Map/list interactions, such as clicking a list item to focus the matching marker, are also deferred. On the auth side: email verification, password reset, and account settings are deferred.
 
 ## Architecture Refactoring
 

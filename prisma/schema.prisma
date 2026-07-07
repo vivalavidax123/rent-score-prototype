@@ -24,6 +24,21 @@ model SearchLocation {
   lastSearchedAt   DateTime        @default(now())
   snapshots        ScoreSnapshot[]
   savedBy          UserSavedLocation[]
+  searchedBy       UserSearch[]
+}
+
+// One row per (user, location): who searched what and when last. Drives the
+// per-user recent list; SearchLocation itself stays a shared score cache.
+// Anonymous searches are not recorded — history starts blank per account.
+model UserSearch {
+  userId         String
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  locationId     String
+  location       SearchLocation @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  lastSearchedAt DateTime       @default(now())
+
+  @@id([userId, locationId])
+  @@index([userId, lastSearchedAt])
 }
 
 // One row per star: which user saved which location. Replaces the old
@@ -67,6 +82,7 @@ model User {
   sessions      Session[]
   accounts      Account[]
   savedLocations UserSavedLocation[]
+  searches      UserSearch[]
 
   @@unique([email])
   @@map("user")

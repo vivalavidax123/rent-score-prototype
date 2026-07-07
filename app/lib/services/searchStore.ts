@@ -128,26 +128,60 @@ function toRecentSearch(
   };
 }
 
-// Recent searches stay global (the search cache is shared by everyone), but
-// the star on each chip belongs to the requesting user. Signed-out visitors
-// pass null: the empty-string filter matches no rows, so every chip reads
-// as unsaved.
+// Search history is per-account (UserSearch rows), so a new account starts
+// blank and never sees other users' searches. Signed-out visitors get an
+// empty list — the shared SearchLocation rows are a score cache, not a feed.
 export async function listRecentSearches(
   userId: string | null,
   limit = 8,
 ): Promise<RecentSearch[]> {
-  const locations = await prisma.searchLocation.findMany({
+  if (!userId) {
+    return [];
+  }
+
+  const rows = await prisma.userSearch.findMany({
+    where: { userId },
     orderBy: { lastSearchedAt: "desc" },
     take: limit,
     include: {
-      snapshots: { orderBy: { createdAt: "desc" }, take: 1 },
-      savedBy: { where: { userId: userId ?? "" }, take: 1 },
+      location: {
+        include: {
+          snapshots: { orderBy: { createdAt: "desc" }, take: 1 },
+          savedBy: { where: { userId }, take: 1 },
+        },
+      },
     },
   });
 
-  return locations.map((location) =>
-    toRecentSearch(location, location.savedBy[0]?.savedAt ?? null),
+  return rows.map((row) =>
+    toRecentSearch(
+      // The chip should show when *this user* last searched the spot, not
+      // when anyone did, so the row's timestamp overrides the location's.
+      { ...row.location, lastSearchedAt: row.lastSearchedAt },
+      row.location.savedBy[0]?.savedAt ?? null,
+    ),
   );
+}
+
+// Called after a successful search by a signed-in user. Upserts so
+// re-searching a spot bumps it to the top instead of duplicating it. The
+// location row is created by saveSnapshot; if that failed (or the cache row
+// vanished) there is nothing to attach history to, so it is a silent no-op.
+export async function recordUserSearch(userId: string, cacheKey: string) {
+  const location = await prisma.searchLocation.findUnique({
+    where: { cacheKey },
+    select: { id: true },
+  });
+
+  if (!location) {
+    return;
+  }
+
+  await prisma.userSearch.upsert({
+    where: { userId_locationId: { userId, locationId: location.id } },
+    update: { lastSearchedAt: new Date() },
+    create: { userId, locationId: location.id },
+  });
 }
 
 export async function listSavedLocations(
