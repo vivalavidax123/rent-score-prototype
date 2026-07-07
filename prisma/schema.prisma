@@ -1,3 +1,4 @@
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -9,6 +10,7 @@ datasource db {
 
 // One row per searched location. cacheKey is the rounded "lat,lng" pair so
 // repeat searches of the same spot reuse the same row.
+
 model SearchLocation {
   id               String          @id @default(cuid())
   cacheKey         String          @unique
@@ -20,14 +22,28 @@ model SearchLocation {
   longitude        Float
   createdAt        DateTime        @default(now())
   lastSearchedAt   DateTime        @default(now())
-  // Null means not saved; a timestamp doubles as the save date for sorting.
-  savedAt          DateTime?
   snapshots        ScoreSnapshot[]
+  savedBy          UserSavedLocation[]
+}
+
+// One row per star: which user saved which location. Replaces the old
+// global SearchLocation.savedAt column — locations and snapshots stay a
+// shared cache, only the "saved" flag is per-user. savedAt doubles as the
+// save date and the sort key, same pattern as before.
+model UserSavedLocation {
+  userId     String
+  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  locationId String
+  location   SearchLocation @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  savedAt    DateTime       @default(now())
+
+  @@id([userId, locationId])
 }
 
 // One row per computed score result. Groups and scores are stored as JSON
 // strings (kept from the SQLite days for simplicity; Postgres has a native
 // Json type we could migrate to later).
+
 model ScoreSnapshot {
   id           String         @id @default(cuid())
   locationId   String
@@ -38,4 +54,68 @@ model ScoreSnapshot {
   createdAt    DateTime       @default(now())
 
   @@index([locationId, createdAt])
+}
+
+model User {
+  id            String    @id
+  name          String
+  email         String
+  emailVerified Boolean   @default(false)
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  sessions      Session[]
+  accounts      Account[]
+  savedLocations UserSavedLocation[]
+
+  @@unique([email])
+  @@map("user")
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([token])
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verification")
 }

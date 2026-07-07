@@ -8,7 +8,9 @@ import type {
 
 // Owns the recent-search and saved-location lists so every component that
 // needs them (chips, comparison panel) reads the same single copy.
-export function useSavedSearches(placesState: PlacesState) {
+// userId is a dependency because both lists are user-relative: signing in
+// or out must refetch so stars and the saved row reflect the new viewer.
+export function useSavedSearches(placesState: PlacesState, userId: string | null) {
   const [recent, setRecent] = useState<RecentSearch[]>([]);
   const [saved, setSaved] = useState<RecentSearch[]>([]);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -40,16 +42,16 @@ export function useSavedSearches(placesState: PlacesState) {
           setRecent(historyData.searches);
         }
 
-        if (favouritesData.ok) {
-          setSaved(favouritesData.searches);
-        }
+        // Signed-out visitors get 401 from /api/favourites; an empty list
+        // (not the previous user's list) is the correct rendering of that.
+        setSaved(favouritesData.ok ? favouritesData.searches : []);
       })
       .catch(() => {});
 
     return () => {
       cancelled = true;
     };
-  }, [placesState, refreshKey]);
+  }, [placesState, refreshKey, userId]);
 
   const toggleSaved = useCallback(async (search: RecentSearch) => {
     const isSaved = search.savedAt !== null;

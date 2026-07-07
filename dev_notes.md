@@ -20,7 +20,6 @@ It should not yet be described as a production full-stack platform. The backend 
 
 Missing production-grade full-stack pieces:
 
-* **Authentication:** needed for accounts, saved searches, personal comparisons, and user-specific settings. Deliberately deferred; the schema can later add a user ID column to `SearchLocation`.
 * **Backend operations:** no rate limiting, background jobs, observability, structured logging, or error tracking. Request caching now exists via the database snapshot cache.
 * **Admin/data management:** category weights and brand lists are code-managed; there is no admin UI or config storage.
 * **First-party datasets:** rent trends, crime/safety, schools, childcare, population density, and planning/development signals are placeholders until dedicated sources are integrated.
@@ -89,6 +88,28 @@ Two saved locations can be compared side by side. Implementation:
 * **Stale selections are derived away, not synced away.** If a location is unstarred while selected in a dropdown, the component does not fix the state in an effect (the `react-hooks/set-state-in-effect` lint rule forbids it because it causes a cascading second render). Instead the effective selection is derived on every render: an id no longer present in the saved list simply counts as "nothing selected". Rule of thumb: if a value can be computed from existing state/props, compute it during render instead of storing and synchronising it.
 
 Recommended next full-stack milestone: deploy to Vercel with a hosted Postgres (swap the Prisma datasource provider), since the core loop — search, score, save, compare — is now complete. Authentication remains the follow-up after that if multi-user support becomes a goal.
+
+## Authentication
+
+Accounts landed with Better Auth (email/password plus Google OAuth), chosen over Auth.js (its docs predate the Next 16 `middleware.ts` → `proxy.ts` rename and it discourages password auth) and Clerk (hosted; user data would live outside our database). Everything stays in the existing Neon Postgres through the Prisma adapter.
+
+Pieces:
+
+* `app/lib/auth.ts` — the server instance: password hashing (scrypt, stored in `account.password`), database sessions, and the Google token exchange. `BETTER_AUTH_SECRET` signs session cookies; rotating it logs everyone out.
+* `app/api/auth/[...all]/route.ts` — one catch-all handler serves every auth endpoint (sign-up, sign-in, sign-out, the Google callback at `/api/auth/callback/google`).
+* `app/lib/auth-client.ts` — browser client; `useSession()` is reactive, so signing out re-renders every subscriber.
+* `/login` — one page toggling between sign-in and sign-up (they share every field but name), plus "Continue with Google" which is a full-page redirect out and back.
+* The CLI (`npx @better-auth/cli generate`) wrote four models into `schema.prisma`: `user`, `session`, `account` (one row per linked login method — a user can hold both a password and a Google account), `verification`.
+
+Favourites became per-user via a `UserSavedLocation` join table (`userId`, `locationId`, `savedAt`, composite primary key). The old global `SearchLocation.savedAt` column was dropped — locations and snapshots stay a shared cache because a location's score does not depend on who asks; only the star is per-viewer. Recent searches remain global for now (`listRecentSearches` takes the viewer's id purely to mark which chips are starred; signed-out visitors match no rows). **Existing stars could not be migrated** — they had no owning user — so dev-branch stars were dropped with the column, and production will lose its stars the same way when this deploys.
+
+API boundary: all `/api/favourites` verbs resolve the session cookie first and answer **401** without one — a fourth error code alongside 400/404/500, meaning "we don't know who you are". `/api/history` stays public. `setLocationSaved` maps `P2003` (unknown location on save) and `P2025` (missing row on unsave) to 404; saving twice is an idempotent upsert.
+
+UI: `AuthStatus` in the page header shows a sign-in link or email + sign-out; star buttons only render when signed in; `useSavedSearches` takes the viewer's user id as an effect dependency so login/logout refetches both lists, and a 401 from favourites renders as an empty saved list rather than a stale one.
+
+Migration note: `prisma migrate dev` refuses non-interactive shells, so the migration was generated with `prisma migrate diff --from-schema-datasource --to-schema-datamodel --script` into a hand-named migration folder and applied with `prisma migrate deploy` — the same command the Vercel build runs.
+
+Deployment checklist (not yet done): paste the real `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` into local `.env` (placeholders sit there now; email/password works without them), then add `BETTER_AUTH_SECRET` (a fresh one, not the dev value), `BETTER_AUTH_URL=https://rent-score-prototype.vercel.app`, and the Google pair to Vercel. Both redirect URIs (localhost and vercel.app) are already registered in the Google console.
 
 ## Category Configuration
 
@@ -238,7 +259,7 @@ Planned indicators are shown as placeholders and must not be treated as live dat
 
 ## Deferred Work
 
-Deployment, authentication, saved locations, AI summaries, crime data, school quality, and rental price analysis are deferred. Map/list interactions, such as clicking a list item to focus the matching marker, are also deferred.
+AI summaries, crime data, school quality, and rental price analysis are deferred. Map/list interactions, such as clicking a list item to focus the matching marker, are also deferred. On the auth side: per-user recent searches, email verification, password reset, and account settings are deferred.
 
 ## Architecture Refactoring
 

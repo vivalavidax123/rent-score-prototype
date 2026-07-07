@@ -8,6 +8,8 @@ type RecentSearchesProps = {
   recent: RecentSearch[];
   saved: RecentSearch[];
   disabled: boolean;
+  // Saving needs an account; when false the star buttons are not rendered.
+  canSave: boolean;
   onSelect: (search: RecentSearch) => void;
   onToggleSaved: (search: RecentSearch) => void;
 };
@@ -15,13 +17,20 @@ type RecentSearchesProps = {
 type SearchChipProps = {
   search: RecentSearch;
   disabled: boolean;
+  canSave: boolean;
   onSelect: (search: RecentSearch) => void;
   onToggleSaved: (search: RecentSearch) => void;
 };
 
 // Buttons cannot be nested in HTML, so the chip is a div holding two
 // separate buttons: the address (re-run the search) and the star (save).
-function SearchChip({ search, disabled, onSelect, onToggleSaved }: SearchChipProps) {
+function SearchChip({
+  search,
+  disabled,
+  canSave,
+  onSelect,
+  onToggleSaved,
+}: SearchChipProps) {
   const isSaved = search.savedAt !== null;
 
   return (
@@ -30,7 +39,7 @@ function SearchChip({ search, disabled, onSelect, onToggleSaved }: SearchChipPro
         type="button"
         onClick={() => onSelect(search)}
         disabled={disabled}
-        className="flex items-center gap-2 rounded-l-full py-1.5 pl-3 pr-1 hover:bg-emerald-50 disabled:opacity-50"
+        className={`flex items-center gap-2 rounded-l-full py-1.5 pl-3 hover:bg-emerald-50 disabled:opacity-50 ${canSave ? "pr-1" : "rounded-r-full pr-3"}`}
       >
         <span className="max-w-52 truncate">{search.formattedAddress}</span>
         {search.overallScore !== null ? (
@@ -39,17 +48,19 @@ function SearchChip({ search, disabled, onSelect, onToggleSaved }: SearchChipPro
           </span>
         ) : null}
       </button>
-      <button
-        type="button"
-        onClick={() => onToggleSaved(search)}
-        disabled={disabled}
-        aria-label={isSaved ? "Remove from saved locations" : "Save this location"}
-        className="rounded-r-full py-1.5 pl-1 pr-2.5 text-sm leading-none hover:bg-amber-50 disabled:opacity-50"
-      >
-        <span className={isSaved ? "text-amber-500" : "text-slate-300"}>
-          {isSaved ? "★" : "☆"}
-        </span>
-      </button>
+      {canSave && (
+        <button
+          type="button"
+          onClick={() => onToggleSaved(search)}
+          disabled={disabled}
+          aria-label={isSaved ? "Remove from saved locations" : "Save this location"}
+          className="rounded-r-full py-1.5 pl-1 pr-2.5 text-sm leading-none hover:bg-amber-50 disabled:opacity-50"
+        >
+          <span className={isSaved ? "text-amber-500" : "text-slate-300"}>
+            {isSaved ? "★" : "☆"}
+          </span>
+        </button>
+      )}
     </div>
   );
 }
@@ -58,6 +69,7 @@ export function RecentSearches({
   recent,
   saved,
   disabled,
+  canSave,
   onSelect,
   onToggleSaved,
 }: RecentSearchesProps) {
@@ -82,6 +94,7 @@ export function RecentSearches({
                 <SearchChip
                   search={search}
                   disabled={disabled}
+                  canSave={canSave}
                   onSelect={onSelect}
                   onToggleSaved={onToggleSaved}
                 />
@@ -102,6 +115,7 @@ export function RecentSearches({
                 <SearchChip
                   search={search}
                   disabled={disabled}
+                  canSave={canSave}
                   onSelect={onSelect}
                   onToggleSaved={onToggleSaved}
                 />

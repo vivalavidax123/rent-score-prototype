@@ -102,11 +102,15 @@ type LocationWithLatestSnapshot = {
   latitude: number;
   longitude: number;
   lastSearchedAt: Date;
-  savedAt: Date | null;
   snapshots: { overallScore: number }[];
 };
 
-function toRecentSearch(location: LocationWithLatestSnapshot): RecentSearch {
+// savedAt is per-user (UserSavedLocation join table), so it arrives as a
+// separate argument instead of living on the location row.
+function toRecentSearch(
+  location: LocationWithLatestSnapshot,
+  savedAt: Date | null,
+): RecentSearch {
   return {
     id: location.id,
     query: location.query,
@@ -116,7 +120,7 @@ function toRecentSearch(location: LocationWithLatestSnapshot): RecentSearch {
     latitude: location.latitude,
     longitude: location.longitude,
     lastSearchedAt: location.lastSearchedAt.toISOString(),
-    savedAt: location.savedAt?.toISOString() ?? null,
+    savedAt: savedAt?.toISOString() ?? null,
     // A location can exist without a snapshot (snapshots are cleared when
     // the scoring algorithm changes). It must still be listed — a saved
     // place should never disappear because of cache state.
@@ -124,24 +128,42 @@ function toRecentSearch(location: LocationWithLatestSnapshot): RecentSearch {
   };
 }
 
-export async function listRecentSearches(limit = 8): Promise<RecentSearch[]> {
+// Recent searches stay global (the search cache is shared by everyone), but
+// the star on each chip belongs to the requesting user. Signed-out visitors
+// pass null: the empty-string filter matches no rows, so every chip reads
+// as unsaved.
+export async function listRecentSearches(
+  userId: string | null,
+  limit = 8,
+): Promise<RecentSearch[]> {
   const locations = await prisma.searchLocation.findMany({
     orderBy: { lastSearchedAt: "desc" },
     take: limit,
-    include: { snapshots: { orderBy: { createdAt: "desc" }, take: 1 } },
+    include: {
+      snapshots: { orderBy: { createdAt: "desc" }, take: 1 },
+      savedBy: { where: { userId: userId ?? "" }, take: 1 },
+    },
   });
 
-  return locations.map(toRecentSearch);
+  return locations.map((location) =>
+    toRecentSearch(location, location.savedBy[0]?.savedAt ?? null),
+  );
 }
 
-export async function listSavedLocations(): Promise<RecentSearch[]> {
-  const locations = await prisma.searchLocation.findMany({
-    where: { savedAt: { not: null } },
+export async function listSavedLocations(
+  userId: string,
+): Promise<RecentSearch[]> {
+  const rows = await prisma.userSavedLocation.findMany({
+    where: { userId },
     orderBy: { savedAt: "desc" },
-    include: { snapshots: { orderBy: { createdAt: "desc" }, take: 1 } },
+    include: {
+      location: {
+        include: { snapshots: { orderBy: { createdAt: "desc" }, take: 1 } },
+      },
+    },
   });
 
-  return locations.map(toRecentSearch);
+  return rows.map((row) => toRecentSearch(row.location, row.savedAt));
 }
 
 // Full category scores for one location, for the comparison view. Returns
@@ -168,19 +190,32 @@ export async function getComparisonSide(id: string) {
   };
 }
 
-// Saving writes the current time; unsaving writes null. Returns false when
-// the location id does not exist so the API can answer 404 instead of 500.
-export async function setLocationSaved(id: string, saved: boolean) {
+// Saving upserts the user's star row (idempotent — saving twice is fine);
+// unsaving deletes it. Returns false when the location id does not exist
+// (P2003 foreign-key violation on create, P2025 missing row on delete) so
+// the API can answer 404 instead of 500.
+export async function setLocationSaved(
+  userId: string,
+  locationId: string,
+  saved: boolean,
+) {
   try {
-    await prisma.searchLocation.update({
-      where: { id },
-      data: { savedAt: saved ? new Date() : null },
-    });
+    if (saved) {
+      await prisma.userSavedLocation.upsert({
+        where: { userId_locationId: { userId, locationId } },
+        update: {},
+        create: { userId, locationId },
+      });
+    } else {
+      await prisma.userSavedLocation.delete({
+        where: { userId_locationId: { userId, locationId } },
+      });
+    }
     return true;
   } catch (error) {
     if (
       error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === "P2025"
+      (error.code === "P2025" || error.code === "P2003")
     ) {
       return false;
     }

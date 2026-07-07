@@ -1,3 +1,4 @@
+import { auth } from "@/app/lib/auth";
 import {
   listSavedLocations,
   setLocationSaved,
@@ -10,9 +11,29 @@ function errorResponse(error: unknown, fallback: string, status: number) {
   );
 }
 
-export async function GET() {
+// Favourites are per-user, so every verb starts by resolving the session
+// cookie to a user id. No session answers 401 ("we don't know who you are"),
+// distinct from 400 (malformed request) and 404 (no such location).
+async function getUserId(request: Request) {
+  const session = await auth.api.getSession({ headers: request.headers });
+  return session?.user.id ?? null;
+}
+
+const unauthorised = () =>
+  Response.json(
+    { ok: false, error: "Sign in to use saved locations." },
+    { status: 401 },
+  );
+
+export async function GET(request: Request) {
   try {
-    const searches = await listSavedLocations();
+    const userId = await getUserId(request);
+
+    if (!userId) {
+      return unauthorised();
+    }
+
+    const searches = await listSavedLocations(userId);
     return Response.json({ ok: true, searches });
   } catch (error) {
     return errorResponse(error, "Could not load saved locations.", 500);
@@ -42,7 +63,13 @@ export async function POST(request: Request) {
   }
 
   try {
-    const found = await setLocationSaved(locationId, true);
+    const userId = await getUserId(request);
+
+    if (!userId) {
+      return unauthorised();
+    }
+
+    const found = await setLocationSaved(userId, locationId, true);
 
     if (!found) {
       return Response.json(
@@ -69,7 +96,13 @@ export async function DELETE(request: Request) {
   }
 
   try {
-    const found = await setLocationSaved(locationId, false);
+    const userId = await getUserId(request);
+
+    if (!userId) {
+      return unauthorised();
+    }
+
+    const found = await setLocationSaved(userId, locationId, false);
 
     if (!found) {
       return Response.json(

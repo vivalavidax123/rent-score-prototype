@@ -1,7 +1,9 @@
 "use client";
 
+import { authClient } from "./lib/auth-client";
 import { useLocationSearch } from "./hooks/useLocationSearch";
 import { useSavedSearches } from "./hooks/useSavedSearches";
+import { AuthStatus } from "./components/AuthStatus";
 import { ComparePanel } from "./components/ComparePanel";
 import { LocationMap } from "./components/LocationMap";
 import { SearchForm } from "./components/SearchForm";
@@ -38,11 +40,21 @@ export default function Home() {
     searchFromHistory,
   } = useLocationSearch();
 
+  // Saving is per-account, so the lists refetch when the viewer changes
+  // and the star buttons only render for signed-in users.
+  const { data: session } = authClient.useSession();
+
   // Shared by the chips and the comparison panel — one copy of the lists.
-  const { recent, saved, toggleSaved } = useSavedSearches(placesState);
+  const { recent, saved, toggleSaved } = useSavedSearches(
+    placesState,
+    session?.user.id ?? null,
+  );
 
   return (
     <main className="min-h-screen bg-[#f3f6f4] px-4 py-5 text-slate-950 sm:px-6 lg:px-8">
+      <div className="mx-auto mb-3 flex max-w-7xl justify-end">
+        <AuthStatus />
+      </div>
       <section className="mx-auto grid max-w-7xl gap-5 lg:grid-cols-[1.25fr_0.75fr]">
         <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
           <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -93,6 +105,7 @@ export default function Home() {
             recent={recent}
             saved={saved}
             disabled={placesState === "loading"}
+            canSave={session !== null && session !== undefined}
             onSelect={searchFromHistory}
             onToggleSaved={toggleSaved}
           />
