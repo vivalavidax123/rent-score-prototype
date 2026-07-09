@@ -1,0 +1,13 @@
+node_modules
+.next
+.git
+.env
+.env.*
+!.env.docker.example
+*.md
+dev_notes.md
+coverage
+tsconfig.tsbuildinfo
+.claude
+Dockerfile
+docker-compose.yml

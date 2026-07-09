@@ -298,3 +298,15 @@ To improve maintainability, the bloated monolithic files (`app/page.tsx` and `ap
 - **Backend Services:** Separated API integration logic into dedicated services (`app/lib/services/googlePlaces.ts` and `app/lib/services/transitland.ts`), leaving `app/api/places/route.ts` responsible only for request coordination and score computation.
 
 *Note on Transitland API Refactor Issue:* During the initial service extraction, an issue occurred where Transitland bus stops were returned without fetching their distinct route departures. This was quickly identified and patched by ensuring `fetchTransitlandBusDepartures` iterates over the sorted stops and attaches `transportServices` prior to returning to the places route.
+
+## Docker Deployment
+
+Alongside the Vercel + Neon deployment, the repo now ships a self-contained Docker option (`Dockerfile` + `docker-compose.yml`) so someone can run the full stack with only Docker Desktop installed — no Node, npm, or Postgres setup. `docker compose --env-file .env.docker up --build` starts three services: `db` (postgres:17-alpine with a persistent `db-data` volume and a `pg_isready` healthcheck), `migrate` (one-shot `prisma migrate deploy`), and `app` (the Next.js server), ordered via `depends_on` conditions.
+
+Design decisions and their reasons:
+
+* **Migrations run at container start, not image build.** The npm `build` script is `prisma migrate deploy && next build`, but during `docker build` no database is reachable, so the Dockerfile calls `npx next build` directly and a separate compose service applies migrations once the db is healthy.
+* **`output: "standalone"`** was added to `next.config.ts` so the runtime image only carries `.next/standalone` + static assets instead of full `node_modules` (verified: no effect on the Vercel build path).
+* **`NEXT_PUBLIC_MAPS_API_KEY` is a build arg**, not a runtime env var — Next.js inlines `NEXT_PUBLIC_*` into the client bundle during `next build`, so setting it at `docker run` time silently does nothing. Changing it requires an image rebuild.
+* **Debian slim base (`node:22-slim`), not Alpine**, so Prisma's engine auto-detection works without adding musl `binaryTargets` to `schema.prisma`; `openssl` is installed in both build and runtime stages because the Prisma engine requires it.
+* **Config comes from `.env.docker`** (gitignored via the existing `.env*` rule, with a `!.env.docker.example` exception for the committed template) passed through compose variable substitution, so secrets never bake into image layers. `BETTER_AUTH_SECRET` and `GOOGLE_MAPS_API_KEY` fail fast with `:?` if unset; Google OAuth keys are optional since email/password login works without them.

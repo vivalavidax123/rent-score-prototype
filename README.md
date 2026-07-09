@@ -230,6 +230,23 @@ DATABASE_URL="postgresql://USER:PASSWORD@HOST/DATABASE?sslmode=require"
 
 ---
 
+# Run with Docker (no Node or Postgres needed)
+
+The only prerequisite is [Docker Desktop](https://www.docker.com/products/docker-desktop/) (or Docker Engine + Compose on Linux). The compose stack bundles the app and a Postgres database, and applies migrations automatically on startup.
+
+```bash
+git clone https://github.com/YOUR_USERNAME/rent-score-prototype.git
+cd rent-score-prototype
+cp .env.docker.example .env.docker   # fill in the API keys (see comments inside)
+docker compose --env-file .env.docker up --build
+```
+
+Then open http://localhost:3000. Database data persists in the `db-data` Docker volume across restarts; `docker compose down -v` wipes it.
+
+Note: `NEXT_PUBLIC_MAPS_API_KEY` is baked into the frontend at image build time, so rerun with `--build` after changing it.
+
+---
+
 # Installation
 
 ## Clone Repository
