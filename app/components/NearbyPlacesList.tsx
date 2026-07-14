@@ -14,13 +14,25 @@ type NearbyPlacesListProps = {
   placesState: PlacesState;
   placesError: string;
   placeGroups: PlaceGroup[];
+  selectedPlaceId: string | null;
+  onSelectPlace: (placeId: string) => void;
 };
 
 const collapsedRowCount = 3;
 
 // Compact single-line row. Address and place type are low-priority, so
 // they move to a hover tooltip instead of taking up rows of their own.
-function PlaceRow({ place, groupId }: { place: NearbyPlace; groupId: string }) {
+function PlaceRow({
+  place,
+  groupId,
+  selected,
+  onSelect,
+}: {
+  place: NearbyPlace;
+  groupId: string;
+  selected: boolean;
+  onSelect: (placeId: string) => void;
+}) {
   const showServices =
     groupId === "transport" &&
     place.primaryType === "bus_stop" &&
@@ -28,11 +40,21 @@ function PlaceRow({ place, groupId }: { place: NearbyPlace; groupId: string }) {
 
   return (
     <li
-      className="py-2 text-sm"
+      className="py-1 text-sm"
       title={`${formatPlaceType(place.primaryType)} · ${place.address}`}
     >
-      <div className="flex items-center gap-2">
-        <span className="min-w-0 flex-1 truncate text-slate-800">
+      <button
+        type="button"
+        onClick={() => onSelect(place.id)}
+        className={`flex w-full items-center gap-2 rounded-md px-1 py-1 text-left ${
+          selected ? "bg-emerald-50" : "hover:bg-slate-50"
+        }`}
+      >
+        <span
+          className={`min-w-0 flex-1 truncate ${
+            selected ? "font-medium text-emerald-900" : "text-slate-800"
+          }`}
+        >
           {place.name}
         </span>
         {groupId !== "transport" ? (
@@ -43,7 +65,7 @@ function PlaceRow({ place, groupId }: { place: NearbyPlace; groupId: string }) {
         <span className="shrink-0 text-xs font-medium text-slate-600">
           {formatDistance(place.distanceMeters)}
         </span>
-      </div>
+      </button>
       {showServices ? (
         <ul className="mt-1.5 space-y-1">
           {place.transportServices?.map((service) => {
@@ -75,7 +97,15 @@ function PlaceRow({ place, groupId }: { place: NearbyPlace; groupId: string }) {
 // Expansion is deliberately local state: no other component cares whether
 // this category is expanded, so the state lives at the lowest level that
 // reads it — the opposite call to the lifted saved-searches list.
-function CategorySection({ group }: { group: PlaceGroup }) {
+function CategorySection({
+  group,
+  selectedPlaceId,
+  onSelectPlace,
+}: {
+  group: PlaceGroup;
+  selectedPlaceId: string | null;
+  onSelectPlace: (placeId: string) => void;
+}) {
   const [expanded, setExpanded] = useState(false);
 
   const visiblePlaces = expanded
@@ -93,7 +123,13 @@ function CategorySection({ group }: { group: PlaceGroup }) {
         <>
           <ul className="mt-1 divide-y divide-slate-100">
             {visiblePlaces.map((place) => (
-              <PlaceRow key={place.id} place={place} groupId={group.id} />
+              <PlaceRow
+                key={place.id}
+                place={place}
+                groupId={group.id}
+                selected={place.id === selectedPlaceId}
+                onSelect={onSelectPlace}
+              />
             ))}
           </ul>
           {hiddenCount > 0 ? (
@@ -117,6 +153,8 @@ export function NearbyPlacesList({
   placesState,
   placesError,
   placeGroups,
+  selectedPlaceId,
+  onSelectPlace,
 }: NearbyPlacesListProps) {
   const allPlaces = placeGroups.flatMap((group) => group.places);
   const closestPlace = allPlaces.reduce<(typeof allPlaces)[number] | null>(
@@ -164,7 +202,12 @@ export function NearbyPlacesList({
       {placesState === "success" ? (
         <div className="mt-4 grid gap-3 lg:grid-cols-2">
           {placeGroups.map((group) => (
-            <CategorySection key={group.id} group={group} />
+            <CategorySection
+              key={group.id}
+              group={group}
+              selectedPlaceId={selectedPlaceId}
+              onSelectPlace={onSelectPlace}
+            />
           ))}
         </div>
       ) : null}

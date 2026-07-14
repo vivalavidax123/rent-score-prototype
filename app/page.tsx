@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { authClient } from "./lib/auth-client";
 import { useLocationSearch } from "./hooks/useLocationSearch";
 import { useSavedSearches } from "./hooks/useSavedSearches";
@@ -48,6 +49,12 @@ export default function Home() {
   const { recent, saved, toggleSaved } = useSavedSearches(
     placesState,
     session?.user.id ?? null,
+  );
+
+  // A fresh object per click (not a bare id) so re-clicking the same row
+  // still re-triggers the map's pan/info-window effect.
+  const [selectedPlace, setSelectedPlace] = useState<{ placeId: string } | null>(
+    null,
   );
 
   return (
@@ -123,13 +130,19 @@ export default function Home() {
             placesState={placesState}
             placesError={placesError}
             placeGroups={placeGroups}
+            selectedPlaceId={selectedPlace?.placeId ?? null}
+            onSelectPlace={(placeId) => setSelectedPlace({ placeId })}
           />
         </div>
 
         <aside className="space-y-6">
           <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
             <h2 className="text-base font-semibold text-slate-950">Location preview</h2>
-            <LocationMap location={location} placeGroups={placeGroups} />
+            <LocationMap
+              location={location}
+              placeGroups={placeGroups}
+              selectedPlace={selectedPlace}
+            />
             <p className="mt-4 text-sm leading-6 text-slate-600">
               {location
                 ? `Matched as ${location.locationType.toLowerCase().replaceAll("_", " ")}. Map markers show the searched location and nearby amenities using each category radius.`

@@ -341,3 +341,15 @@ Raised the snapshot cache TTL in `app/lib/services/searchStore.ts` from 24 hours
 Root cause / motivation: the Places API (New) calls request `rating` + `userRatingCount`, which forces every SearchNearby into the **Enterprise** SKU — the smallest free bucket at 1,000 calls/month (Google removed the $200 monthly credit on 2025-03-01, replacing it with per-SKU monthly free tiers: Essentials 10k / Pro 5k / Enterprise 1k). Each uncached search fans out to ~10 SearchNearby calls, so the free ceiling is only ~100 unique searches/month, and SearchNearby (not SearchText, which the earlier brand-tagging refactor already cut to ~1/search) is the binding quota.
 
 Why this helps without costing anything: a longer TTL only changes how long existing snapshot rows are reused before Google is re-queried — it adds no rows and no storage, and strictly *reduces* paid Google calls. The only trade-off is data freshness, and amenities change on a weeks-to-months timescale, so a week-old result is still accurate. 7 days (vs 30) was chosen as a freshness/savings balance. Fetch-layer changes (new categories, field-mask tweaks) still require clearing `ScoreSnapshot`, same as scoring-algorithm changes, since the cache stores raw place data.
+
+## Amenity List → Map Linking (clickable category rows)
+
+Rows under each category in `NearbyPlacesList` are now buttons. Clicking one highlights the row, pans the map to that place, opens its info window, and — when the map is not fully visible (e.g. the row is far down the page) — smooth-scrolls the page up to the map.
+
+How it works:
+
+* **Selection state lives in `page.tsx`** as `selectedPlace: { placeId } | null`, because the list and the map are sibling components. A fresh object is created per click (instead of a bare id string) so re-clicking the same row still re-triggers the map effect.
+* **`LocationMap` keeps refs** to the map instance, the loaded Google API, a `Map<placeId, MarkerEntry>` of markers, and the currently open info window. Marker construction was extracted into `createPlaceMarker`, shared by the initial render (first 8 places per group) and on-demand creation when a clicked row is beyond the first 8. `openEntry` is the single open-info-window path (marker click or row click), closing the previous window so only one stays open.
+* **Scroll-to-map** happens in the selection effect: `mapDiv.scrollIntoView({ behavior: "smooth", block: "start" })`, guarded by a `getBoundingClientRect` check so the page stays put when the map is already fully visible. `scroll-mt-16` on the map div leaves breathing room at the viewport top.
+
+Watch-out (verification): the embedded Claude browser pane freezes animation frames — `behavior: "smooth"` scrolling never moves there (instant scrolling works), screenshots time out, and the Maps JS API silently falls back to StaticMapService images (no `.gm-style`, no info windows). The feature was verified there by probing that `scrollIntoView` is called with the right args on the map div, plus manual verification in a real browser. Do not debug "scroll not working" in that pane.

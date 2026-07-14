@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 type MapLocation = {
   formattedAddress: string;
@@ -38,13 +38,16 @@ type LatLngLiteral = {
   lng: number;
 };
 
-type GoogleMap = object;
+type GoogleMap = {
+  panTo: (position: LatLngLiteral) => void;
+};
 type GoogleMarker = {
   addListener: (eventName: "click", handler: () => void) => void;
 };
 
 type GoogleInfoWindow = {
   open: (options: { anchor: GoogleMarker; map: GoogleMap }) => void;
+  close: () => void;
 };
 
 type GoogleMapsApi = {
@@ -155,16 +158,83 @@ function formatDistance(distanceMeters: number) {
     : `${(distanceMeters / 1000).toFixed(1)} km`;
 }
 
+type MarkerEntry = {
+  marker: GoogleMarker;
+  infoWindow: GoogleInfoWindow;
+  position: LatLngLiteral;
+};
+
+function createPlaceMarker(
+  google: GoogleMapsApi,
+  map: GoogleMap,
+  place: NearbyPlace,
+  group: PlaceGroup,
+  onMarkerClick: (entry: MarkerEntry) => void,
+): MarkerEntry {
+  const color = categoryColors[group.id] ?? "#334155";
+  const position = {
+    lat: place.latitude,
+    lng: place.longitude,
+  };
+  const marker = new google.maps.Marker({
+    position,
+    map,
+    title: place.name,
+    icon: {
+      path: google.maps.SymbolPath.CIRCLE,
+      scale: place.source === "brand" ? 7 : 5,
+      fillColor: color,
+      fillOpacity: 0.9,
+      strokeColor: "#ffffff",
+      strokeWeight: 2,
+    },
+  });
+  const infoWindow = new google.maps.InfoWindow({
+    content: `
+      <div style="max-width:220px">
+        <strong>${escapeHtml(place.name)}</strong>
+        <div>${escapeHtml(group.label)} · ${formatDistance(place.distanceMeters)}</div>
+        <div style="margin-top:4px;color:#475569">${escapeHtml(place.address)}</div>
+      </div>
+    `,
+  });
+  const entry = { marker, infoWindow, position };
+
+  marker.addListener("click", () => onMarkerClick(entry));
+
+  return entry;
+}
+
 export function LocationMap({
   location,
   placeGroups,
+  selectedPlace,
 }: {
   location: MapLocation | null;
   placeGroups: PlaceGroup[];
+  selectedPlace: { placeId: string } | null;
 }) {
   const mapRef = useRef<HTMLDivElement | null>(null);
+  const mapInstanceRef = useRef<GoogleMap | null>(null);
+  const googleApiRef = useRef<GoogleMapsApi | null>(null);
+  const markerEntriesRef = useRef(new Map<string, MarkerEntry>());
+  const openInfoWindowRef = useRef<GoogleInfoWindow | null>(null);
   const [mapError, setMapError] = useState("");
   const apiKey = process.env.NEXT_PUBLIC_MAPS_API_KEY;
+
+  // Single entry point for opening info windows so only one stays open,
+  // whether triggered by a marker click or a list-row click.
+  const openEntry = useCallback((entry: MarkerEntry) => {
+    const map = mapInstanceRef.current;
+
+    if (!map) {
+      return;
+    }
+
+    openInfoWindowRef.current?.close();
+    entry.infoWindow.open({ anchor: entry.marker, map });
+    openInfoWindowRef.current = entry.infoWindow;
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -193,6 +263,11 @@ export function LocationMap({
           fullscreenControl: false,
         });
 
+        googleApiRef.current = google;
+        mapInstanceRef.current = map;
+        markerEntriesRef.current = new Map();
+        openInfoWindowRef.current = null;
+
         new google.maps.Marker({
           position: center,
           map,
@@ -201,38 +276,11 @@ export function LocationMap({
         });
 
         for (const group of placeGroups) {
-          const color = categoryColors[group.id] ?? "#334155";
-
           for (const place of group.places.slice(0, 8)) {
-            const marker = new google.maps.Marker({
-              position: {
-                lat: place.latitude,
-                lng: place.longitude,
-              },
-              map,
-              title: place.name,
-              icon: {
-                path: google.maps.SymbolPath.CIRCLE,
-                scale: place.source === "brand" ? 7 : 5,
-                fillColor: color,
-                fillOpacity: 0.9,
-                strokeColor: "#ffffff",
-                strokeWeight: 2,
-              },
-            });
-            const infoWindow = new google.maps.InfoWindow({
-              content: `
-                <div style="max-width:220px">
-                  <strong>${escapeHtml(place.name)}</strong>
-                  <div>${escapeHtml(group.label)} · ${formatDistance(place.distanceMeters)}</div>
-                  <div style="margin-top:4px;color:#475569">${escapeHtml(place.address)}</div>
-                </div>
-              `,
-            });
-
-            marker.addListener("click", () => {
-              infoWindow.open({ anchor: marker, map });
-            });
+            markerEntriesRef.current.set(
+              place.id,
+              createPlaceMarker(google, map, place, group, openEntry),
+            );
           }
         }
 
@@ -251,7 +299,54 @@ export function LocationMap({
     return () => {
       isMounted = false;
     };
-  }, [apiKey, location, placeGroups]);
+  }, [apiKey, location, placeGroups, openEntry]);
+
+  // Pan to a place picked from the amenity list. Only the first few places
+  // per category get markers up front, so build one on demand if needed.
+  useEffect(() => {
+    const google = googleApiRef.current;
+    const map = mapInstanceRef.current;
+
+    if (!selectedPlace || !google || !map) {
+      return;
+    }
+
+    let entry = markerEntriesRef.current.get(selectedPlace.placeId);
+
+    if (!entry) {
+      for (const group of placeGroups) {
+        const place = group.places.find(
+          (candidate) => candidate.id === selectedPlace.placeId,
+        );
+
+        if (place) {
+          entry = createPlaceMarker(google, map, place, group, openEntry);
+          markerEntriesRef.current.set(place.id, entry);
+          break;
+        }
+      }
+    }
+
+    if (!entry) {
+      return;
+    }
+
+    map.panTo(entry.position);
+    openEntry(entry);
+
+    // Bring the map into view when the clicked row is far down the page,
+    // but stay put if the map is already fully visible.
+    const mapElement = mapRef.current;
+
+    if (mapElement) {
+      const rect = mapElement.getBoundingClientRect();
+      const fullyVisible = rect.top >= 0 && rect.bottom <= window.innerHeight;
+
+      if (!fullyVisible) {
+        mapElement.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    }
+  }, [selectedPlace, placeGroups, openEntry]);
 
   if (!apiKey) {
     return (
@@ -271,7 +366,7 @@ export function LocationMap({
 
   return (
     <div className="mt-5 overflow-hidden rounded-lg border border-slate-200 bg-slate-100">
-      <div ref={mapRef} className="aspect-[4/3] w-full" />
+      <div ref={mapRef} className="aspect-[4/3] w-full scroll-mt-16" />
       {mapError ? (
         <p className="border-t border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
           {mapError}
