@@ -353,3 +353,13 @@ How it works:
 * **Scroll-to-map** happens in the selection effect: `mapDiv.scrollIntoView({ behavior: "smooth", block: "start" })`, guarded by a `getBoundingClientRect` check so the page stays put when the map is already fully visible. `scroll-mt-16` on the map div leaves breathing room at the viewport top.
 
 Watch-out (verification): the embedded Claude browser pane freezes animation frames — `behavior: "smooth"` scrolling never moves there (instant scrolling works), screenshots time out, and the Maps JS API silently falls back to StaticMapService images (no `.gm-style`, no info windows). The feature was verified there by probing that `scrollIntoView` is called with the right args on the map div, plus manual verification in a real browser. Do not debug "scroll not working" in that pane.
+
+## Return-to-Row Button (after jumping to the map)
+
+After a clicked amenity row auto-scrolls the page to the map, a floating circular arrow button appears fixed at the bottom-right. Clicking it smooth-scrolls back to the row that was clicked (centred in the viewport) and hides the button.
+
+How it works:
+
+* `page.tsx` owns `showReturnButton`. `LocationMap` receives an `onAutoScroll` callback (wrapped in `useCallback` with empty deps so its identity is stable and never re-triggers the map's selection effect) and calls it only inside the `!fullyVisible` branch — so the button appears only when an actual jump happened, not when the map was already on screen.
+* Each `PlaceRow` `<li>` carries `id={`place-row-${place.id}`}`; the button's handler finds it with `document.getElementById(...).scrollIntoView({ behavior: "smooth", block: "center" })`.
+* The button hides on click, and when a new search starts. The reset uses the render-time adjustment pattern (`prevPlacesState` state + guarded compare during render) because the new `react-hooks/set-state-in-effect` lint rule rejects calling `setState` synchronously inside `useEffect`.

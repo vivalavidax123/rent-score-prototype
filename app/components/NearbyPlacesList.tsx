@@ -40,6 +40,7 @@ function PlaceRow({
 
   return (
     <li
+      id={`place-row-${place.id}`}
       className="py-1 text-sm"
       title={`${formatPlaceType(place.primaryType)} · ${place.address}`}
     >

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { authClient } from "./lib/auth-client";
 import { useLocationSearch } from "./hooks/useLocationSearch";
 import { useSavedSearches } from "./hooks/useSavedSearches";
@@ -56,6 +56,38 @@ export default function Home() {
   const [selectedPlace, setSelectedPlace] = useState<{ placeId: string } | null>(
     null,
   );
+
+  // Shown only after the page actually auto-scrolled to the map, so the
+  // user has a one-tap way back to the row they were reading.
+  const [showReturnButton, setShowReturnButton] = useState(false);
+
+  // Stable identity (state setters never change), so passing it into
+  // LocationMap's effect dependencies never re-triggers that effect.
+  const handleAutoScroll = useCallback(() => setShowReturnButton(true), []);
+
+  // A new search replaces the rows the button would return to, so drop the
+  // button as soon as results start reloading. Adjusting state during render
+  // (guarded by a previous-value check) avoids an extra effect pass:
+  // https://react.dev/learn/you-might-not-need-an-effect
+  const [prevPlacesState, setPrevPlacesState] = useState(placesState);
+
+  if (prevPlacesState !== placesState) {
+    setPrevPlacesState(placesState);
+
+    if (placesState !== "success") {
+      setShowReturnButton(false);
+    }
+  }
+
+  function returnToSelectedRow() {
+    if (selectedPlace) {
+      document
+        .getElementById(`place-row-${selectedPlace.placeId}`)
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+
+    setShowReturnButton(false);
+  }
 
   return (
     <main className="min-h-screen bg-[#f3f6f4] px-4 py-5 text-slate-950 sm:px-6 lg:px-8">
@@ -142,6 +174,7 @@ export default function Home() {
               location={location}
               placeGroups={placeGroups}
               selectedPlace={selectedPlace}
+              onAutoScroll={handleAutoScroll}
             />
             <p className="mt-4 text-sm leading-6 text-slate-600">
               {location
@@ -159,6 +192,30 @@ export default function Home() {
           />
         </aside>
       </section>
+
+      {showReturnButton ? (
+        <button
+          type="button"
+          onClick={returnToSelectedRow}
+          aria-label="Back to the amenity you were viewing"
+          title="Back to the amenity you were viewing"
+          className="fixed bottom-6 right-6 z-50 flex size-11 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 shadow-lg transition hover:bg-slate-50 hover:text-slate-950"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="size-5"
+            aria-hidden="true"
+          >
+            <path d="M9 14 4 9l5-5" />
+            <path d="M4 9h10a6 6 0 0 1 6 6v5" />
+          </svg>
+        </button>
+      ) : null}
     </main>
   );
 }

@@ -209,10 +209,12 @@ export function LocationMap({
   location,
   placeGroups,
   selectedPlace,
+  onAutoScroll,
 }: {
   location: MapLocation | null;
   placeGroups: PlaceGroup[];
   selectedPlace: { placeId: string } | null;
+  onAutoScroll: () => void;
 }) {
   const mapRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<GoogleMap | null>(null);
@@ -344,9 +346,10 @@ export function LocationMap({
 
       if (!fullyVisible) {
         mapElement.scrollIntoView({ behavior: "smooth", block: "start" });
+        onAutoScroll();
       }
     }
-  }, [selectedPlace, placeGroups, openEntry]);
+  }, [selectedPlace, placeGroups, openEntry, onAutoScroll]);
 
   if (!apiKey) {
     return (
