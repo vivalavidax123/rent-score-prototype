@@ -36,6 +36,34 @@ export function useLocationSearch() {
   const [profile, setProfile] = useState<WeightProfile>("carFree");
   
   const autocompleteRequestId = useRef(0);
+  const geocodeRequestId = useRef(0);
+  const placesRequestId = useRef(0);
+  const geocodeController = useRef<AbortController | null>(null);
+  const placesController = useRef<AbortController | null>(null);
+
+  function cancelGeocodeRequest() {
+    geocodeRequestId.current += 1;
+    geocodeController.current?.abort();
+    geocodeController.current = null;
+  }
+
+  function cancelPlacesRequest() {
+    placesRequestId.current += 1;
+    placesController.current?.abort();
+    placesController.current = null;
+  }
+
+  // Requests may still be active when navigating away. Invalidate their IDs
+  // as well as aborting them so a response already queued by the browser can
+  // never update state after this hook unmounts.
+  useEffect(() => {
+    return () => {
+      geocodeRequestId.current += 1;
+      placesRequestId.current += 1;
+      geocodeController.current?.abort();
+      placesController.current?.abort();
+    };
+  }, []);
 
   useEffect(() => {
     const trimmedQuery = query.trim();
@@ -97,6 +125,12 @@ export function useLocationSearch() {
     nextLocation: GeocodeLocation,
     profileOverride?: WeightProfile,
   ) {
+    cancelPlacesRequest();
+
+    const requestId = placesRequestId.current;
+    const controller = new AbortController();
+    placesController.current = controller;
+
     // State updates are asynchronous, so a caller that just changed the
     // profile passes the new value directly instead of reading stale state.
     const activeProfile = profileOverride ?? profile;
@@ -118,8 +152,17 @@ export function useLocationSearch() {
         locationType: nextLocation.locationType,
         profile: activeProfile,
       });
-      const response = await fetch(`/api/places?${placesUrl.toString()}`);
+      const response = await fetch(`/api/places?${placesUrl.toString()}`, {
+        signal: controller.signal,
+      });
       const data = (await response.json()) as PlacesSuccess | PlacesFailure;
+
+      if (
+        controller.signal.aborted ||
+        requestId !== placesRequestId.current
+      ) {
+        return;
+      }
 
       if (!response.ok || !data.ok) {
         setPlacesError(data.ok ? "Could not load nearby places." : data.error);
@@ -133,14 +176,30 @@ export function useLocationSearch() {
       setResultFromCache(data.cached);
       setPlacesState("success");
     } catch {
+      if (
+        controller.signal.aborted ||
+        requestId !== placesRequestId.current
+      ) {
+        return;
+      }
+
       setPlacesError("Nearby places failed to load. Try searching again.");
       setPlacesState("error");
+    } finally {
+      if (requestId === placesRequestId.current) {
+        placesController.current = null;
+      }
     }
   }
 
   async function handleSearch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setShowSuggestions(false);
+
+    // A submitted search supersedes both an earlier geocode and any place
+    // result still loading for the previous location.
+    cancelGeocodeRequest();
+    cancelPlacesRequest();
 
     const trimmedQuery = query.trim();
 
@@ -149,6 +208,10 @@ export function useLocationSearch() {
       setSearchState("error");
       return;
     }
+
+    const requestId = geocodeRequestId.current;
+    const controller = new AbortController();
+    geocodeController.current = controller;
 
     setSearchState("loading");
     setError("");
@@ -161,8 +224,16 @@ export function useLocationSearch() {
     try {
       const response = await fetch(
         `/api/geocode?query=${encodeURIComponent(trimmedQuery)}`,
+        { signal: controller.signal },
       );
       const data = (await response.json()) as GeocodeSuccess | GeocodeFailure;
+
+      if (
+        controller.signal.aborted ||
+        requestId !== geocodeRequestId.current
+      ) {
+        return;
+      }
 
       if (!response.ok || !data.ok) {
         setError(data.ok ? "Could not geocode this location." : data.error);
@@ -174,8 +245,19 @@ export function useLocationSearch() {
       setSearchState("success");
       await loadNearbyPlaces(data.location);
     } catch {
+      if (
+        controller.signal.aborted ||
+        requestId !== geocodeRequestId.current
+      ) {
+        return;
+      }
+
       setError("Search failed. Check your connection and try again.");
       setSearchState("error");
+    } finally {
+      if (requestId === geocodeRequestId.current) {
+        geocodeController.current = null;
+      }
     }
   }
 
@@ -190,6 +272,10 @@ export function useLocationSearch() {
   }
 
   function searchFromHistory(search: RecentSearch) {
+    // A history selection supersedes a typed search that may still be
+    // geocoding. loadNearbyPlaces cancels any older places request itself.
+    cancelGeocodeRequest();
+
     const nextLocation: GeocodeLocation = {
       query: search.query,
       formattedAddress: search.formattedAddress,
