@@ -115,11 +115,13 @@ The overall score is a weighted average across all categories, viewed through on
 
 This is a full-stack Next.js prototype: the frontend UI, API routes, scoring/business logic, database persistence, and third-party data integrations live in one application.
 
-Persistence is now included: searches, cached score results, recent-search history, and starred favourite locations are stored in a local SQLite database managed with Prisma. Implementation details and design rationale live in `dev_notes.md`.
+Persistence is included: searches, cached score results, per-user recent-search history, authentication sessions, and starred favourite locations are stored in PostgreSQL and managed with Prisma. The hosted deployment uses Neon, while the Docker setup includes its own Postgres service. Implementation details and design rationale live in `dev_notes.md`.
+
+Authentication is implemented with Better Auth. Users can create an email/password account or optionally sign in with Google, and saved locations and search history are scoped to the signed-in account.
 
 It is not yet a production full-stack platform. The main missing pieces are:
 
-* Authentication and user sessions
+* Complete account-management flows such as email verification, password reset, and account settings
 * Admin tooling for managing scoring weights and category configuration outside code
 * Production backend safeguards such as rate limiting, observability, background jobs, and error tracking
 * First-party or ingested datasets for rent trends, safety, schools, population density, and planning data
@@ -212,15 +214,23 @@ rent-score-prototype/
 
 # Environment Variables
 
-Create a `.env.local` file:
+Create a `.env.local` file for application and API configuration:
 
 ```env
 GOOGLE_MAPS_API_KEY=YOUR_API_KEY
 NEXT_PUBLIC_MAPS_API_KEY=YOUR_PUBLIC_KEY
 TRANSITLAND_API_KEY=YOUR_TRANSITLAND_KEY
+
+BETTER_AUTH_SECRET=YOUR_RANDOM_SECRET
+BETTER_AUTH_URL=http://localhost:3000
+
+GOOGLE_CLIENT_ID=YOUR_GOOGLE_OAUTH_CLIENT_ID
+GOOGLE_CLIENT_SECRET=YOUR_GOOGLE_OAUTH_CLIENT_SECRET
 ```
 
-`TRANSITLAND_API_KEY` is optional and is used to show bus route numbers and destinations for nearby bus stops.
+`TRANSITLAND_API_KEY` is optional and is used to show bus route numbers and destinations for nearby bus stops. `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are also optional; email/password authentication works without Google OAuth. Generate a long random value for `BETTER_AUTH_SECRET` and do not commit it.
+
+`NEXT_PUBLIC_MAPS_API_KEY` is exposed to the browser by design, so use a browser-restricted key. Keep `GOOGLE_MAPS_API_KEY` server-restricted. For Google OAuth, configure the local callback URL as `http://localhost:3000/api/auth/callback/google`.
 
 Also create a `.env` file for the database (the Prisma CLI reads `.env`, not `.env.local`). Use your Neon (or any Postgres) connection string:
 
@@ -294,7 +304,7 @@ Potential future features include:
 * More detailed public transport accessibility metrics
 * Walkability based on real walking routes instead of straight-line distance estimates
 * Population density, suburb rent trends, schools, childcare, safety, and planned development datasets
-* User accounts and saved locations
+* Email verification, password reset, and account settings
 * Historical suburb trend analysis
 * AI-generated suburb summaries
 * Mobile-friendly optimisation

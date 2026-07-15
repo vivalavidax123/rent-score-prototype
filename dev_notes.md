@@ -16,7 +16,7 @@ The project can be described as a full-stack Next.js prototype because it includ
 * backend business logic for category retrieval, filtering, deduplication, scoring, and transport enrichment
 * environment-based server and browser API key configuration
 
-It should not yet be described as a production full-stack platform. The backend layer is request/response API orchestration rather than a persistent application backend.
+It should not yet be described as a production full-stack platform. It now has a persistent PostgreSQL application backend for authentication, search history, favourites, and cached score snapshots, but its runtime remains request/response oriented and lacks several production operations safeguards.
 
 Missing production-grade full-stack pieces:
 
@@ -288,7 +288,7 @@ Planned indicators are shown as placeholders and must not be treated as live dat
 
 ## Deferred Work
 
-AI summaries, crime data, school quality, and rental price analysis are deferred. Map/list interactions, such as clicking a list item to focus the matching marker, are also deferred. On the auth side: email verification, password reset, and account settings are deferred.
+AI summaries, crime data, school quality, and rental price analysis are deferred. Map/list linking and the return-to-row interaction are now implemented. On the auth side, email verification, password reset, and account settings are deferred.
 
 ## Architecture Refactoring
 
@@ -313,7 +313,7 @@ Design decisions and their reasons:
 
 ## Continuous Integration (GitHub Actions)
 
-A CI workflow (`.github/workflows/ci.yml`) runs on every push and pull request to `main`. On a fresh `ubuntu-latest` machine it checks out the code, installs Node 20, runs `npm ci`, then enforces three quality gates: `npm run lint` (ESLint), `npx tsc --noEmit` (type-check), and `npm run test` (Vitest, 18 tests). A failure marks the commit/PR red.
+A CI workflow (`.github/workflows/ci.yml`) runs on every push and pull request to `main`. On a fresh `ubuntu-latest` machine it checks out the code, installs Node 20, runs `npm ci`, then enforces three quality gates: `npm run lint` (ESLint), `npx tsc --noEmit` (type-check), and `npm run test` (Vitest, currently 27 tests). A failure marks the commit/PR red.
 
 Design decisions and their reasons:
 
