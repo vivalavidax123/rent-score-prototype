@@ -48,7 +48,6 @@ type GoogleMarker = {
 type GoogleInfoWindow = {
   open: (options: { anchor: GoogleMarker; map: GoogleMap }) => void;
   close: () => void;
-  setContent: (content: string) => void;
 };
 
 type GoogleMapsApi = {
@@ -163,79 +162,7 @@ type MarkerEntry = {
   marker: GoogleMarker;
   infoWindow: GoogleInfoWindow;
   position: LatLngLiteral;
-  place: NearbyPlace;
-  group: PlaceGroup;
-  photoState: "idle" | "loading" | "loaded" | "unavailable";
-  photo: PlacePhoto | null;
 };
-
-type PlacePhoto = {
-  imageUrl: string;
-  attributions: {
-    displayName: string;
-    uri: string | null;
-  }[];
-};
-
-function getInfoWindowContent(
-  entry: Pick<MarkerEntry, "place" | "group" | "photoState" | "photo">,
-) {
-  const { place, group, photoState, photo } = entry;
-  const photoMarkup =
-    photoState === "loading"
-      ? `<div style="height:120px;margin-bottom:10px;border-radius:8px;background:#e2e8f0;display:flex;align-items:center;justify-content:center;color:#64748b;font-size:12px">Loading photo...</div>`
-      : photoState === "loaded" && photo
-        ? `<img src="${escapeHtml(photo.imageUrl)}" alt="${escapeHtml(place.name)}" style="display:block;width:100%;height:120px;margin-bottom:8px;border-radius:8px;object-fit:cover" />${
-            photo.attributions.length > 0
-              ? `<div style="margin:-2px 0 8px;color:#64748b;font-size:10px">Photo by ${photo.attributions
-                  .map((attribution) =>
-                    attribution.uri
-                      ? `<a href="${escapeHtml(attribution.uri)}" target="_blank" rel="noopener noreferrer" style="color:#475569">${escapeHtml(attribution.displayName)}</a>`
-                      : escapeHtml(attribution.displayName),
-                  )
-                  .join(", ")}</div>`
-              : ""
-          }`
-        : "";
-
-  return `
-    <div style="width:220px;max-width:220px">
-      ${photoMarkup}
-      <strong>${escapeHtml(place.name)}</strong>
-      <div>${escapeHtml(group.label)} · ${formatDistance(place.distanceMeters)}</div>
-      <div style="margin-top:4px;color:#475569">${escapeHtml(place.address)}</div>
-    </div>
-  `;
-}
-
-async function loadPlacePhoto(entry: MarkerEntry) {
-  if (entry.photoState !== "idle" || entry.place.id.startsWith("transitland:")) {
-    return;
-  }
-
-  entry.photoState = "loading";
-  entry.infoWindow.setContent(getInfoWindowContent(entry));
-
-  try {
-    const response = await fetch(
-      `/api/place-photo?placeId=${encodeURIComponent(entry.place.id)}`,
-      { cache: "no-store" },
-    );
-
-    if (!response.ok) {
-      entry.photoState = "unavailable";
-      entry.infoWindow.setContent(getInfoWindowContent(entry));
-      return;
-    }
-
-    entry.photo = (await response.json()) as PlacePhoto;
-    entry.photoState = "loaded";
-    entry.infoWindow.setContent(getInfoWindowContent(entry));
-  } catch {
-    entry.photoState = "unavailable";
-    entry.infoWindow.setContent(getInfoWindowContent(entry));
-  }
-}
 
 function createPlaceMarker(
   google: GoogleMapsApi,
@@ -263,19 +190,15 @@ function createPlaceMarker(
     },
   });
   const infoWindow = new google.maps.InfoWindow({
-    content: "",
+    content: `
+      <div style="max-width:220px">
+        <strong>${escapeHtml(place.name)}</strong>
+        <div>${escapeHtml(group.label)} · ${formatDistance(place.distanceMeters)}</div>
+        <div style="margin-top:4px;color:#475569">${escapeHtml(place.address)}</div>
+      </div>
+    `,
   });
-  const entry: MarkerEntry = {
-    marker,
-    infoWindow,
-    position,
-    place,
-    group,
-    photoState: "idle",
-    photo: null,
-  };
-
-  infoWindow.setContent(getInfoWindowContent(entry));
+  const entry = { marker, infoWindow, position };
 
   marker.addListener("click", () => onMarkerClick(entry));
 
@@ -313,7 +236,6 @@ export function LocationMap({
     openInfoWindowRef.current?.close();
     entry.infoWindow.open({ anchor: entry.marker, map });
     openInfoWindowRef.current = entry.infoWindow;
-    void loadPlacePhoto(entry);
   }, []);
 
   useEffect(() => {
